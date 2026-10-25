@@ -1,0 +1,19 @@
+{
+  "product_name": "mitraa",
+  "brand_title": "Mitraa INFOGRAPHICS",
+  "header_subtitle": "Interactive AI Study Sheet \u2022 Visual Learning",
+  "hero_label": "Mitraa STUDY BRAIN",
+  "icon_names": [
+    "vedantu.jpg",
+    "icon.ico"
+  ],
+  "running_header": "Mitraa INFOGRAPHICS \u2022 Interactive AI Study Sheet",
+  "disclaimer": "Disclaimer: AI generated, check before applying in real life",
+  "footer_format": "{product_name} \u2022 Lesson Infographic \u2022 Saved automatically to {save_path} \u2022 All rights reserved",
+  "takeaways_header": "Key Takeaways:",
+  "checkpoint_prefix": "» Checkpoint:",
+  "milestone_prefix": "Milestone #",
+  "step_prefix": "STEP",
+  "output_dir_name": "infographics",
+  "filename_prefix": "infographic"
+}

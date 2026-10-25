@@ -1,0 +1,95 @@
+---
+title: FAQ and troubleshooting
+description: Diagnostic triage ladder, Slack bot permissions, eliminating ADK agent slop and complexity, and search dependency fallbacks.
+---
+
+# FAQ and troubleshooting
+
+Most issues where the Slack bot connects but fails to respond or upload files stem from Slack configuration gaps, missing OAuth permissions, or dependency setups. This guide walks through the diagnostic triage ladder and comprehensive solutions.
+
+## Diagnostic Triage Ladder
+
+1. **Is the process running?** `python -m chat_agent.main slack` runs in the foreground without daemon mode. If the terminal exits, no events are processed.
+2. **Did it connect to Slack?** You should see `Starting Slack Socket Mode listener.` followed by `Bolt app is running!`.
+3. **Is Slack sending events?** Run with debug logging to observe incoming `events_api` envelopes.
+4. **Seeing only `PING` / `PONG` lines?** The socket is healthy, but Slack is sending no events due to missing event subscriptions, token mismatch, or channel membership.
+5. **Envelope arrives but no text response?** Inspect logs for model selection and execution lines (`[Model Selection]`, `[Model Execution]`). Check that `USER_LLM_API_KEY` is set.
+6. **Text response appears but PDF notes are missing?** Check logs for `[Notes Engine]` Phase 2. Verify that `files:write` scope is granted to the Bot Token and the app was reinstalled.
+
+---
+
+## Slack Bot Permissions
+
+### What permissions and scopes does the Slack bot require?
+
+The bot requires four core Bot Token Scopes configured under **OAuth & Permissions**:
+
+| Scope | Required For | Failure Symptom If Missing |
+| :--- | :--- | :--- |
+| `app_mentions:read` | Receiving `@mention` events in channels | Bot ignores channel mentions; no events received |
+| `chat:write` | Posting threaded replies to channels and DMs | `chat.postMessage` fails with `not_in_channel` or `missing_scope` |
+| `im:history` | Reading direct message conversations | DMs receive no reply even if Socket Mode is connected |
+| `files:write` | Uploading compiled study notes & infographic PDFs | PDF auto-upload fails with `missing_scope` during `files.getUploadURLExternal` |
+
+### Why did adding a scope in the Slack Developer Console not take effect?
+Slack bakes granted OAuth scopes into the token at install time. Editing the scope list under **OAuth & Permissions** only modifies the requested permission manifest:
+1. After adding any scope (such as `files:write`), navigate to **Install App** in the left sidebar.
+2. Click **Reinstall to Workspace**.
+3. Confirm the permissions. The existing `SLACK_BOT_TOKEN` will now inherit the updated scope.
+
+### How do I check active token scopes programmatically?
+Query Slack's `auth.test` endpoint directly:
+
+```bash
+python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.environ['SLACK_BOT_TOKEN']).auth_test(); print('BOT='+r['user']); print('SCOPES='+(r.headers.get('x-oauth-scopes') or 'NONE'))"
+```
+
+---
+
+## Architectural Simplification: Why Eliminate ADK Agents?
+
+### Why was Google ADK Runner/Agent replaced with direct GenAI calls?
+The earlier architecture used Google ADK's `Agent`, `Runner`, `InMemorySessionService`, and experimental subagent routers. In practice, this introduced significant complexity and friction ("agent slop"):
+
+1. **Agent Transfer Context Warnings**: Multi-agent transfers triggered recurring warnings (`App "mitra" can transfer between agents but has no context_cache_config`) because prompt prefixes and tool sets swapped on every transition without shared cache configs.
+2. **Tool Serialization Errors**: ADK's `OpenAILlm` attempted naive `json.dumps()` serialization on tool outputs, crashing on Pydantic `BaseModel` objects (`TypeError: Object of type NormalizedSearchResponse is not JSON serializable`).
+3. **Hidden Control Flow**: Multi-layered runner state machines obscured simple API calls and made retry backoff and failovers harder to debug.
+4. **Direct Simplicity**: The simplified engine in `src/chat_agent/agents/runner.py` uses direct `google.genai.Client` and `AsyncOpenAI` / `httpx` with an explicit function-calling loop. It provides zero-latency immediate replies, transparent 3x randomized retries across `FIRST_CHOICE_MODELS`, and seamless failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`).
+
+---
+
+## Search Dependencies & Fallbacks
+
+### What happens if `tavily-python` is missing?
+The search pool in `src/chat_agent/tools/tool_factory.py` implements dual-mode resilience:
+- **Primary SDK Mode**: If `tavily-python` (pinned at `>=0.7.26` in `requirements.txt`) is installed and `TAVILY_API_KEY` is present, it uses `tavily.TavilyClient`.
+- **Automatic REST Fallback**: If the package is not installed or raises an `ImportError`, the tool seamlessly falls back to direct asynchronous HTTP requests via `httpx` against `https://api.tavily.com/search`.
+- **Pool Failover**: If Tavily fails or lacks an API key, the weighted search pool automatically falls back to DuckDuckGo, Exa, Firecrawl, or Serper without failing the user request.
+
+### Why did DuckDuckGo log `DuckDuckGo REST fallback failed: No module named 'bs4'`?
+When DuckDuckGo's library search hit rate limits or failed, the REST HTML scraper attempted to import BeautifulSoup (`bs4`). If `beautifulsoup4` was not installed, it logged an error.
+- **Dependency Declared**: `ddgs`, `duckduckgo-search>=6.0.0`, `beautifulsoup4>=4.12.0`, and `requests>=2.31.0` are now pinned in `requirements.txt`.
+- **Zero-Dependency Regex Fallback**: `DuckDuckGoSearchTool` now includes a resilient fallback using Python's standard library `re` and `html.unescape` so HTML parsing never crashes even in minimal container environments lacking `bs4`.
+
+---
+
+## Additional Troubleshooting
+
+### Why does `Bolt app is running!` appear and then nothing else?
+`Bolt app is running!` indicates a healthy, connected idle state. In `INFO` log level, arriving events do not generate console spam. To inspect inbound events, enable `DEBUG` logging.
+
+### Why do only PING and PONG appear continuously?
+The WebSocket connection is active, but Slack has no events to route to the app:
+1. **Missing Subscriptions**: Check that `app_mention` and `message.im` are subscribed under **Event Subscriptions**.
+2. **App Token Mismatch**: Verify that `SLACK_APP_TOKEN` belongs to the exact same Slack app as `SLACK_BOT_TOKEN`.
+3. **Channel Membership**: In public or private channels, the bot must be invited (`/invite @Mitra`).
+
+### Why does the text response arrive immediately before the PDF?
+PDF study notes and lesson infographic posters are compiled using ReportLab vector operations on a detached background worker thread (`daemon=True`). The root agent sends its synthesized concept explanation and practice questions immediately so the user is never blocked. The PDF is delivered to the same thread as soon as compilation finishes.
+
+### Why does the Cloudflare Worker receive no events after setup?
+The most frequent issue is that **Socket Mode remains enabled** in the Slack App Console:
+1. When Socket Mode is enabled, Slack bypasses your HTTP Request URL and sends 100% of traffic over WebSocket.
+2. In the Slack Console, navigate to **Socket Mode** and toggle it **Off**.
+3. Under **Event Subscriptions**, confirm your Cloudflare Worker Request URL is verified and click **Save Changes**.
+4. Reinstall the app to the workspace.

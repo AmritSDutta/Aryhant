@@ -1,0 +1,154 @@
+---
+title: API reference
+description: REST API, webhook, and health endpoints served by the FastAPI application with request/response schemas, rate limits, and authentication.
+---
+
+# API reference
+
+The FastAPI application in `src/chat_agent/app.py` exposes the REST chat interface, health probes, and webhook receivers. All endpoints are rate-limited per client IP using `pyrate-limiter` via `src/chat_agent/config/rate_limiter.py`.
+
+## Route Summary
+
+| Method | Endpoint | Description | Rate Limit | Auth |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/` | Application metadata | 30 / min | Public |
+| `GET` | `/api/health` | Liveness and health check | 60 / min | Public |
+| `POST` | `/api/chat` | One-shot REST agent execution | 5 / min | Auth0 Bearer Token (when `REQUIRE_AUTH=true`) |
+| `POST` | `/webhooks/slack` | Slack HTTP Events webhook | Uncapped | Shared secret (`X-Webhook-Secret`) or Slack signature |
+
+---
+
+## Endpoints
+
+### `GET /`
+Returns service metadata.
+
+```json
+{
+  "name": "Private Chat Agent",
+  "version": "0.1.0"
+}
+```
+
+---
+
+### `GET /api/health`
+Liveness probe for container orchestrators (Google Cloud Run / Kubernetes).
+
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "ok": true
+}
+```
+
+---
+
+### `POST /api/chat`
+Executes the direct Google GenAI / OpenAI model engine for a one-shot web chat interaction.
+
+#### Request Headers
+- `Authorization: Bearer <AUTH0_ACCESS_TOKEN>` (Enforced when `REQUIRE_AUTH=true`).
+- `Content-Type: application/json`
+
+#### Request Body
+```json
+{
+  "message": "Explain photosynthesis for Grade 5 students.",
+  "user_id": "web-user-123",
+  "session_id": "web-session-456",
+  "channel": "web"
+}
+```
+
+| Field | Type | Required | Default | Constraints |
+| :--- | :--- | :--- | :--- | :--- |
+| `message` | string | Yes | — | Min 1 char, Max 8000 chars |
+| `user_id` | string | No | `"web-user"` | User identifier for session isolation |
+| `session_id` | string | No | `"web-session"` | Conversation thread session ID |
+| `channel` | string | No | `"web"` | Source channel tag prepended to prompt |
+
+#### Response Body
+```json
+{
+  "reply": "Photosynthesis is the process by which green plants make their own food...",
+  "model": "gemini-flash-lite-latest",
+  "channel": "web"
+}
+```
+
+#### Processing Behavior
+1. **Input Validation**: Runs `scan_for_vulnerability(payload.message)`. If malicious patterns are flagged, returns `400 Bad Request`.
+2. **Auth0 Authentication**: When `REQUIRE_AUTH=true`, verifies RS256 JWT against Auth0's JWKS and enforces user email authorization (`verify_allowed_users`).
+3. **Direct Execution**: Dispatches prompt to `run_agent()`, which runs 3 attempts across `FIRST_CHOICE_MODELS` with transient retry backoff and direct `FALLBACK_GPT_MODEL` (`gpt-6-luna`) failover.
+4. **Demo Mode Fallback**: If no Gemini API key is configured (`llm_ready() == False`), returns a demo reply without calling the model.
+
+---
+
+### `POST /webhooks/slack`
+Receives Slack Events API notifications forwarded via Cloudflare Worker and Upstash QStash.
+
+#### Request Headers
+- `X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret`: Must match `WEBHOOK_SHARED_SECRET`.
+- Alternatively, direct Slack signatures: `X-Slack-Signature` and `X-Slack-Request-Timestamp`.
+
+#### Processing Behavior
+1. **URL Verification**: If `payload["type"] == "url_verification"`, immediately returns `{"challenge": payload["challenge"]}`.
+2. **Authorization**: Validates headers via `authorize_webhook`. Returns `401 Unauthorized` if mismatched, or `503 Service Unavailable` if secrets are unconfigured.
+3. **Service Check**: Verifies `slack_http_ready()` (`SLACK_BOT_TOKEN` present).
+4. **Asynchronous Dispatch**: Returns `{"ok": true}` within milliseconds and delegates execution to `handle_slack_payload` in FastAPI `BackgroundTasks`.
+
+---
+
+## CORS Configuration
+
+Allowed origins configured in `app.py`:
+- `http://localhost:8000`
+- `http://127.0.0.1:8000`
+- `https://experiments.amritai.org`
+
+---
+
+## Python Interfaces & Schemas
+
+### `QuestionAnswerSchema`
+Defined in `src/chat_agent/schema/fundamental_schema.py`:
+
+```python
+class QuestionAnswerSchema(BaseModel):
+    """Schema representing a question, hint, and evaluation score."""
+    id: int
+    question: str
+    hint: str = ""
+    score: Optional[float] = None
+```
+
+### Question Generator Functions
+Exported from `src/chat_agent/agents/`:
+
+```python
+async def generate_candidate_questions(
+    topic: str,
+    min_count: int = 15,
+    max_count: int = 20,
+) -> list[QuestionAnswerSchema]:
+    """Generate 15-20 candidate practice questions and hints using the secondary LLM agent."""
+
+async def generate_curated_questions(
+    topic: str,
+) -> list[QuestionAnswerSchema]:
+    """Generate 15-20 candidates and return the top 10 curated questions scored via TypeSafe AI."""
+```
+
+### TypeSafe Feedback Evaluator
+Exported from `src/chat_agent/utils/fast_decision/typesafe_integrator.py`:
+
+```python
+async def get_feedback(
+    qnah: list[QuestionAnswerSchema],
+    user_input: str = "",
+) -> list[QuestionAnswerSchema]:
+    """Score hints across question items using TypeSafe Noul probabilities and return top 10 by score."""
+```
+

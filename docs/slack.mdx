@@ -1,0 +1,118 @@
+---
+title: Slack channel
+description: Socket Mode for local runs, HTTP Events API through a Cloudflare Worker and QStash for Cloud Run, Block Kit generation, and automated PDF file uploads.
+---
+
+# Slack channel
+
+The codebase supports two distinct operational modes for Slack: **Socket Mode** for local development and **HTTP Events API** with edge proxying for scale-to-zero cloud deployments.
+
+## 1. Local Development: Socket Mode
+
+In local development, `src/chat_agent/slack/slack_app.py` initializes a `slack_bolt.AsyncApp` using `SLACK_BOT_TOKEN`. The app connects to Slack's WebSocket gateway via `AsyncSocketModeHandler` using `SLACK_APP_TOKEN`:
+
+```bash
+python -m chat_agent.main slack
+```
+
+- **Outbound WebSocket**: No public IP or tunneling software (e.g., ngrok) is required.
+- **Required Tokens**: `SLACK_BOT_TOKEN` (`xoxb-...`) and `SLACK_APP_TOKEN` (`xapp-...`).
+- **Prerequisites**: Socket Mode enabled in the Slack console, bot events `app_mention` and `message.im` subscribed, and bot scopes (`app_mentions:read`, `chat:write`, `im:history`, `files:write`) granted.
+
+## 2. Production: HTTP Events API & Scale-to-Zero
+
+In serverless environments like Google Cloud Run, holding open persistent WebSockets is inefficient and prevents scaling down to zero instances. Instead, the bot processes webhook payloads delivered to `POST /webhooks/slack`.
+
+### Scale-to-Zero Forwarding Architecture
+
+Because Cloud Run cold starts can take 5–10 seconds, and Slack's Events API requires an HTTP 200 acknowledgment within **3 seconds**, direct webhook delivery risks timeouts and repetitive Slack retries.
+
+To resolve this, a lightweight Cloudflare Worker (`proxies/cloudflare-slack-ack.js`) acknowledges Slack in under 50ms and enqueues the event into **Upstash QStash**, which retries delivery until Cloud Run wakes up.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as Slack User
+  participant Slack as Slack API Events
+  participant CF as Cloudflare Worker Proxy
+  participant QStash as Upstash QStash
+  participant Run as Cloud Run - webhooks slack
+  participant Engine as Direct GenAI / GPT Engine
+  participant SlackAPI as Slack Web API
+  User->>Slack: Tag bot or send DM
+  Slack->>CF: POST event - expects 200 within 3s
+  CF-->>Slack: HTTP 200 OK - Instant ACK
+  CF->>QStash: Enqueue event - POST publish
+  QStash->>Run: POST /webhooks/slack - retries on cold start
+  Run->>Run: authorize_webhook secret check
+  Run-->>QStash: HTTP 200 {"ok": true}
+  Run->>Engine: BackgroundTasks -> handle_slack_payload
+  Engine->>SlackAPI: chat.postMessage in thread
+  SlackAPI-->>User: Bot replies in Slack thread
+```
+
+### Setup Instructions
+
+1. **Obtain QStash Credentials**:
+   - In the [Upstash Console](https://console.upstash.com/), copy `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY`.
+2. **Generate `WEBHOOK_SHARED_SECRET`**:
+   - Generate a secure 32-byte secret:
+     ```bash
+     python -c "import secrets; print(secrets.token_hex(32))"
+     ```
+   - Store this secret in your Cloud Run environment variables or GCP Secret Manager.
+3. **Deploy the Cloudflare Worker**:
+   - Deploy `proxies/cloudflare-slack-ack.js` to Cloudflare Workers.
+   - Configure environment secrets:
+     - `QSTASH_TOKEN`: Upstash QStash token.
+     - `CLOUD_RUN_WEBHOOK`: `https://<YOUR_CLOUD_RUN_URL>/webhooks/slack`.
+     - `WEBHOOK_SHARED_SECRET`: The shared secret generated in step 2.
+4. **Configure Slack App Request URL**:
+   - In [Slack App Console](https://api.slack.com/apps) $\rightarrow$ **Event Subscriptions**, set **Request URL** to the Cloudflare Worker URL.
+   - The worker automatically handles the `url_verification` challenge.
+5. **Disable Socket Mode**:
+   - In the Slack App Console, toggle **Socket Mode** to **Off**.
+   - Under **Install App**, click **Reinstall to Workspace**.
+
+> [!IMPORTANT]
+> If Socket Mode is left enabled in the Slack Console, Slack will ignore your Request URL and route all events over WebSocket. Always disable Socket Mode when switching to the HTTP scale-to-zero path.
+
+## 3. Payload Processing & Security
+
+`src/chat_agent/slack/slack_http.py` and `src/chat_agent/webhooks.py` handle inbound HTTP payloads:
+
+- **Webhook Authorization**: `authorize_webhook` verifies requests against `WEBHOOK_SHARED_SECRET` (`X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret` headers using constant-time `hmac.compare_digest`) or direct Slack v0 signatures (`X-Slack-Signature` + `X-Slack-Request-Timestamp` with a 5-minute timestamp window).
+- **Event Filtering**: `should_handle_event` accepts `app_mention` events and direct messages (`channel_type in {"im", "mpim"}`), ignoring bot messages to prevent feedback loops.
+- **Event Deduplication**: `is_duplicate_event` caches event IDs (`event_id`, `client_msg_id`, or `channel:ts`) for 10 minutes (`_DEDUP_TTL_SECONDS = 600`). If an unexpected exception occurs, `remove_dedup_event` evicts the ID to permit redelivery.
+- **Threaded Sessions**: Sessions are scoped to `slack:{channel}:{thread_ts}` for threads or `slack:{channel}:{msg_ts}` for top-level messages.
+- **Multimodal Downloads**: When `MULTIMODAL_ENABLED=true`, attachments are extracted and downloaded from Slack's authenticated private CDN using the bot token.
+
+## 4. Automated PDF File Uploads
+
+When study notes or lesson infographics are generated, `upload_file_to_slack` in `src/chat_agent/tools/tool_factory.py` delivers the compiled PDF directly to the active Slack conversation thread:
+
+- **Two-Step External Upload**: Uses Slack's `files.getUploadURLExternal` to request an upload URL and completes delivery via `files.completeUploadExternal`.
+- **Security Boundary**: `_is_allowed_upload_path` verifies that uploaded files originate from authorized operating system temporary directories or the designated application workspace.
+- **Thread Targeting**: Attaches files to the exact initiating thread timestamp (`thread_ts`) or posts to the channel.
+
+> [!NOTE]
+> Bot tokens require the `files:write` OAuth scope to upload files to Slack channels.
+
+## 5. Structured Block Kit Formatting
+
+`src/chat_agent/slack/post_generator.py` translates raw markdown responses from the agent into structured Slack Block Kit blocks:
+
+```python
+from chat_agent.slack.post_generator import generate_slack_post
+
+post = generate_slack_post(reply_text)
+# Returns: {"text": fallback_text, "blocks": [...]}
+```
+
+### Block Kit Features:
+
+- **Fallback Notification Text**: Generates accessible plain text summary (first 200 characters) for push notifications and screen readers.
+- **Header & Divider Blocks**: Formats markdown headings (`# Title`) into Slack `header` blocks followed by `divider` lines.
+- **Context Blocks**: Converts footer notes, concept hints, source citations, and timestamps (prefixed with `Note:`, `Hint:`, `Context:`, `Source:`, or `Timestamp:`) into styled `context` blocks.
+- **Paragraph Chunking**: Splits paragraphs exceeding 2800 characters to adhere to Slack's 3000-character section limit.
+- **20-Block Ceiling**: Enforces a strict ceiling of 20 blocks (`MAX_BLOCKS = 20`) to stay within Slack's message payload limits, appending a truncation notice when needed.

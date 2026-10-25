@@ -1,0 +1,22 @@
+{
+  "name": "Mitra Slack Bot & Study Agent",
+  "theme": "maple",
+  "colors": {
+    "primary": "#4F46E5",
+    "light": "#4F46E5",
+    "dark": "#6366F1"
+  },
+  "filterSidebar": true,
+  "navigation": {
+    "groups": [
+      { "group": "Overview", "pages": ["index"] },
+      { "group": "Setup", "pages": ["prerequisites"] },
+      { "group": "Channels", "pages": ["slack", "email", "multimodal"] },
+      { "group": "API & Auth", "pages": ["api-reference"] },
+      { "group": "Capabilities & Tools", "pages": ["web-search", "study-notes", "question-generation", "observability"] },
+
+      { "group": "Operations & Deployment", "pages": ["operations"] },
+      { "group": "Troubleshooting", "pages": ["faq"] }
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+---
+title: Operations & Deployment
+description: Configuration reference, local commands, Docker containerization, Cloud Run scale-to-zero deployment, and cost controls.
+---
+
+# Operations & Deployment
+
+## 1. Configuration Reference
+
+All settings are managed via environment variables and loaded into the Pydantic `Settings` model in `src/chat_agent/config/settings.py`.
+
+### Core Model & Execution
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `APP_NAME` | `"mitra"` | Application name identifier |
+| `USER_LLM_MODEL` | `"gemini-flash-lite-latest"` | Primary Gemini model identifier |
+| `FIRST_CHOICE_MODELS` | `["gemini-flash-lite-latest", "gemini-2.5-flash"]` | Candidate models for Phase 1 randomized attempts |
+| `FALLBACK_GPT_MODEL` | `"gpt-6-luna"` | OpenAI failover model identifier for Phase 2 |
+| `USER_LLM_API_KEY` | `""` | Gemini API key (checked with `GEMINI_API_KEY` and `GOOGLE_API_KEY`) |
+| `OPENAI_API_KEY` | `""` | OpenAI API key for `FALLBACK_GPT_MODEL` and search summarization |
+| `MAX_INPUT_CHARS` | `4000` | Input prompt character truncation limit |
+| `MAX_OUTPUT_TOKENS` | `256` | Maximum output tokens generated per turn |
+
+### Slack Integration
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `SLACK_BOT_TOKEN` | `""` | Bot User OAuth Token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | `""` | App-Level Token with `connections:write` (`xapp-...`) |
+| `SLACK_SIGNING_SECRET` | `""` | Signing secret for verifying Slack HTTP webhook signatures |
+| `MULTIMODAL_ENABLED` | `true` | Enables Slack attachment parsing and downloading |
+| `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | Maximum number of attachments processed per message |
+| `MAX_SINGLE_ATTACHMENT_SIZE_KB` | `500` | Maximum allowed size per attachment in KB |
+| `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB` | `2` | Maximum cumulative attachment size per message in MB |
+
+### Webhooks & Scale-to-Zero
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `WEBHOOK_SHARED_SECRET` | `""` | Secret for authenticating proxied webhook calls (`X-Webhook-Secret`) |
+| `WEBHOOK_URL` | `""` | QStash webhook endpoint URL |
+| `QSTASH_CURRENT_SIGNING_KEY` | `""` | Upstash QStash current verification signing key |
+| `QSTASH_NEXT_SIGNING_KEY` | `""` | Upstash QStash next verification signing key |
+
+### Search Providers & Tools
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DEFAULT_SEARCH_PROVIDER` | `"random"` | Provider selection strategy: `random`, `auto`, `duckduckgo`, `exa`, `firecrawl`, `tavily`, `serper` |
+| `DUCKDUCKGO_MAX_RESULTS` | `5` | Max search results to retrieve via DuckDuckGo |
+| `SEARCH_MAX_SNIPPET_LENGTH` | `500` | Max character length per search snippet |
+| `TAVILY_API_KEY` | `""` | API key for Tavily search |
+| `EXA_API_KEY` | `""` | API key for Exa AI search |
+| `FIRECRAWL_API_KEY` | `""` | API key for Firecrawl search |
+| `SERPER_API_KEY` | `""` | API key for Serper Google search |
+
+### Security, Auth0 & Telemetry
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `REQUIRE_AUTH` | `false` | When true, enforces Auth0 JWT verification on `/api/chat` |
+| `AUTH0_DOMAIN` | `""` | Auth0 tenant domain (e.g. `your-tenant.us.auth0.com`) |
+| `AUTH0_AUDIENCE` | `""` | Expected Auth0 API audience claim |
+| `GRAFANA_API_TOKEN` | `""` | Grafana Cloud API token for OTLP metrics/traces |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `""` | Base OTLP HTTP collector endpoint |
+| `DOTENV_LOCATION` | `""` | Absolute path to `.env` file when mounted from Secret Manager |
+| `INFISICAL_INJECTED` | `"0"` | Set to `1` when secrets are directly injected by Infisical |
+
+---
+
+## 2. Local Commands
+
+```bash
+# 1. Editable package installation
+python -m pip install -e .
+
+# 2. Start FastAPI REST & Webhook Server
+python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000
+
+# 3. One-shot local CLI test
+python -m chat_agent.main chat --message "Generate 5 Grade 5 math practice questions on fractions."
+
+# 4. Start Slack Socket Mode Listener
+python -m chat_agent.main slack
+```
+
+---
+
+## 3. Docker Containerization
+
+The repository includes a production `Dockerfile` running as a non-root user:
+
+```dockerfile
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000 \
+    PYTHONPATH="/app/src:${PYTHONPATH}"
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl ca-certificates fonts-noto-core && rm -rf /var/lib/apt/lists/*
+RUN groupadd -r appgroup && useradd -r -u 10001 -g appgroup appuser
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY . /app
+RUN chown -R appuser:appgroup /app
+USER appuser
+EXPOSE ${PORT}
+CMD uvicorn chat_agent.app:app --host 0.0.0.0 --port ${PORT}
+```
+
+The `fonts-noto-core` package supplies Noto Sans Devanagari and Bengali fonts, required for Hindi/Bengali text in generated study-note and infographic PDFs on the Linux container.
+
+---
+
+## 4. Google Cloud Run Deployment
+
+Deploy to Google Cloud Run with scale-to-zero configuration and Google Secret Manager integration:
+
+```bash
+# Build and push image
+docker build -t gcr.io/YOUR_PROJECT_ID/slack-bot .
+docker push gcr.io/YOUR_PROJECT_ID/slack-bot
+
+# Deploy to Cloud Run
+gcloud run deploy slack-bot \
+  --image=gcr.io/YOUR_PROJECT_ID/slack-bot \
+  --region=us-central1 \
+  --cpu=2 \
+  --memory=1024Mi \
+  --min-instances=0 \
+  --max-instances=1 \
+  --timeout=600s \
+  --port=8000 \
+  --set-secrets=/app/secrets/.env=task-graph-secret:latest \
+  --set-env-vars=DOTENV_LOCATION=/app/secrets/.env \
+  --allow-unauthenticated
+```
+
+---
+
+## 5. Cost Controls
+
+- **Low-Cost Model**: Primary inference runs on `gemini-flash-lite-latest` with `MAX_OUTPUT_TOKENS=256`.
+- **Fast-Path Moderation**: `IS_GEMINI_MODERATION_ENOUGH=true` bypasses external moderation API costs by leveraging native Gemini safety filters.
+- **Event Filtering**: Discards non-mention channel traffic before triggering model execution.
+- **Edge Scale-to-Zero**: Cloudflare Workers and Upstash QStash handle traffic bursts while Cloud Run remains at zero instances during idle periods.

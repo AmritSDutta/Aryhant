@@ -142,7 +142,7 @@ def test_generate_study_notes_pdf_ignores_unsafe_output_path() -> None:
         output_path=unsafe_path,
     )
     assert res["status"] == "success"
-    assert "mitra_notes" in res["pdf_path"]
+    assert "aryhant_notes" in res["pdf_path"]
     assert Path(res["pdf_path"]).exists()
     assert not Path(unsafe_path).exists()
 

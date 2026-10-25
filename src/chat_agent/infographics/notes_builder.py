@@ -46,21 +46,21 @@ from .config import (
 
 def get_notes_dir() -> Path:
     """Return local temporary directory for study notes."""
-    target = Path(tempfile.gettempdir()) / "mitra_notes"
+    target = Path(tempfile.gettempdir()) / "aryhant_notes"
     target.mkdir(parents=True, exist_ok=True)
     return target
 
 
 def get_diagrams_dir() -> Path:
     """Return local temporary directory for diagrams."""
-    target = Path(tempfile.gettempdir()) / "mitra_diagrams"
+    target = Path(tempfile.gettempdir()) / "aryhant_diagrams"
     target.mkdir(parents=True, exist_ok=True)
     return target
 
 
 def get_reports_dir() -> Path:
     """Return local temporary directory for reports."""
-    target = Path(tempfile.gettempdir()) / "mitra_reports"
+    target = Path(tempfile.gettempdir()) / "aryhant_reports"
     target.mkdir(parents=True, exist_ok=True)
     return target
 

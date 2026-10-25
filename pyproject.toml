@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "adk-slack-email-agent"
+name = "aryhant"
 version = "0.1.0"
-description = "One Google ADK / Gemini agent for Slack, email, and a local web chat preview."
+description = "Aryhant AI companion, educational assistant, and study notes generator for Slack and REST API."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 dynamic = ["dependencies"]

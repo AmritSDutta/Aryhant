@@ -772,8 +772,8 @@ def _is_allowed_upload_path(file_path: str) -> bool:
 
     resolved = Path(file_path).resolve()
     allowed_roots = [
-        (Path(tempfile.gettempdir()) / "mitra_notes").resolve(),
-        (Path(tempfile.gettempdir()) / "mitra_infographics").resolve(),
+        (Path(tempfile.gettempdir()) / "aryhant_notes").resolve(),
+        (Path(tempfile.gettempdir()) / "aryhant_infographics").resolve(),
     ]
     return any(resolved.is_relative_to(root) for root in allowed_roots)
 

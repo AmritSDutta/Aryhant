@@ -12,7 +12,7 @@ from chat_agent.config import Settings
 def mock_settings() -> Settings:
     """Provide an isolated, predictable Settings instance for tests."""
     return Settings(
-        APP_NAME="test-mitra",
+        APP_NAME="test-aryhant",
         USER_LLM_API_KEY="test-llm-key",
         USER_LLM_MODEL="gemini-flash-lite-latest",
         SLACK_BOT_TOKEN="xoxb-test-bot-token",

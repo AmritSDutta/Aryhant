@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     )
 
     # Core App & LLM
-    APP_NAME: str = "mitra"
+    APP_NAME: str = "aryhant"
     USER_LLM_MODEL: str = "gemini-flash-lite-latest"
     INFERENCE_MODEL: str = "gemini-flash-lite-latest"
     FALLBACK_MODEL: str = "gemini-3.1-flash-lite"

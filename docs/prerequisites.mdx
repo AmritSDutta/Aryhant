@@ -109,7 +109,7 @@ Modifying OAuth scopes requires **reinstalling the app to your workspace**:
 `app_mention` events are only delivered for channels the bot has joined. Invite the bot:
 
 ```text
-/invite @Mitra
+/invite @Aryhant
 ```
 
 ## 6. Configuration Verification
@@ -128,5 +128,5 @@ python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.envi
 | DMs ignored, channel mentions work | `im:history` scope missing or app not reinstalled | Add `im:history` scope and reinstall app |
 | PDF upload fails with `missing_scope` | `files:write` scope missing from Bot Token | Add `files:write` scope under OAuth & Permissions and reinstall app |
 | Scope visible in console but missing in `auth.test` | App was not reinstalled after scope update | Click Reinstall to Workspace |
-| `@mention` in channel ignored | Bot is not a member of the channel | Run `/invite @Mitra` in the target channel |
+| `@mention` in channel ignored | Bot is not a member of the channel | Run `/invite @Aryhant` in the target channel |
 | Process exits at startup | Missing `USER_LLM_API_KEY` | Set `USER_LLM_API_KEY` in `.env` |

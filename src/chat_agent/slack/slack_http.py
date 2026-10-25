@@ -63,7 +63,7 @@ async def post_slack_message(
     if blocks:
         payload["blocks"] = blocks
     if not payload.get("text") and blocks:
-        payload["text"] = "Slack Bot Update"
+        payload["text"] = "Aryhant Update"
     if thread_ts:
         payload["thread_ts"] = thread_ts
     async with httpx.AsyncClient(timeout=20) as client:

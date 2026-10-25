@@ -96,7 +96,7 @@ async def test_post_slack_message_blocks_only_fallback():
         call_kwargs = mock_client.post.call_args[1]
         assert call_kwargs["json"]["channel"] == "C123"
         assert call_kwargs["json"]["blocks"] == blocks
-        assert call_kwargs["json"]["text"] == "Slack Bot Update"
+        assert call_kwargs["json"]["text"] == "Aryhant Update"
 
 
 @pytest.mark.asyncio
@@ -170,7 +170,7 @@ def test_generate_slack_post_bold_text_is_section_not_header():
 
 def test_generate_slack_post_empty_fallback():
     post = generate_slack_post("")
-    assert post["text"] == "Slack Bot Update"
+    assert post["text"] == "Aryhant Update"
     assert len(post["blocks"]) == 1
     assert post["blocks"][0]["type"] == "section"
 

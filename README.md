@@ -1,6 +1,6 @@
-# Mitra: AI Daily Companion & ICSE Teaching Assistant
+# Aryhant: AI Daily Companion & ICSE Teaching Assistant
 
-A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email, and REST API chat endpoints. Mitra assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation and Lesson Infographic posters with automated Slack thread delivery.
+A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation and Lesson Infographic posters with automated Slack thread delivery.
 
 > **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, and universal Study Notes / Infographics PDF generation with Slack auto-upload are fully implemented.
 
@@ -35,7 +35,7 @@ sequenceDiagram
     participant Engine as Direct GenAI / GPT Engine
     participant Notes as Background Notes Engine
     participant SlackAPI as Slack Web API
-    User->>Slack: @Mitra "Generate study notes on Fractions"
+    User->>Slack: @Aryhant "Generate study notes on Fractions"
     Slack->>CF: POST event (expects 200 within 3s)
     CF-->>Slack: HTTP 200 OK (Instant ACK)
     CF->>QStash: Enqueue event (POST /v2/publish/...)

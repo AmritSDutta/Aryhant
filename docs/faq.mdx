@@ -51,7 +51,7 @@ python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.envi
 ### Why was Google ADK Runner/Agent replaced with direct GenAI calls?
 The earlier architecture used Google ADK's `Agent`, `Runner`, `InMemorySessionService`, and experimental subagent routers. In practice, this introduced significant complexity and friction ("agent slop"):
 
-1. **Agent Transfer Context Warnings**: Multi-agent transfers triggered recurring warnings (`App "mitra" can transfer between agents but has no context_cache_config`) because prompt prefixes and tool sets swapped on every transition without shared cache configs.
+1. **Agent Transfer Context Warnings**: Multi-agent transfers triggered recurring warnings (`App "aryhant" can transfer between agents but has no context_cache_config`) because prompt prefixes and tool sets swapped on every transition without shared cache configs.
 2. **Tool Serialization Errors**: ADK's `OpenAILlm` attempted naive `json.dumps()` serialization on tool outputs, crashing on Pydantic `BaseModel` objects (`TypeError: Object of type NormalizedSearchResponse is not JSON serializable`).
 3. **Hidden Control Flow**: Multi-layered runner state machines obscured simple API calls and made retry backoff and failovers harder to debug.
 4. **Direct Simplicity**: The simplified engine in `src/chat_agent/agents/runner.py` uses direct `google.genai.Client` and `AsyncOpenAI` / `httpx` with an explicit function-calling loop. It provides zero-latency immediate replies, transparent 3x randomized retries across `FIRST_CHOICE_MODELS`, and seamless failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`).
@@ -82,7 +82,7 @@ When DuckDuckGo's library search hit rate limits or failed, the REST HTML scrape
 The WebSocket connection is active, but Slack has no events to route to the app:
 1. **Missing Subscriptions**: Check that `app_mention` and `message.im` are subscribed under **Event Subscriptions**.
 2. **App Token Mismatch**: Verify that `SLACK_APP_TOKEN` belongs to the exact same Slack app as `SLACK_BOT_TOKEN`.
-3. **Channel Membership**: In public or private channels, the bot must be invited (`/invite @Mitra`).
+3. **Channel Membership**: In public or private channels, the bot must be invited (`/invite @Aryhant`).
 
 ### Why does the text response arrive immediately before the PDF?
 PDF study notes and lesson infographic posters are compiled using ReportLab vector operations on a detached background worker thread (`daemon=True`). The root agent sends its synthesized concept explanation and practice questions immediately so the user is never blocked. The PDF is delivered to the same thread as soon as compilation finishes.

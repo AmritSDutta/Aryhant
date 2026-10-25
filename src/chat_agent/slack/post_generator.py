@@ -41,7 +41,7 @@ def create_header_block(text: str) -> dict[str, Any]:
     clean_text = re.sub(r'^[#*]+\s*|\s*[#*]+$', '', text).strip()[:150]
     return {
         "type": "header",
-        "text": {"type": "plain_text", "text": clean_text or "Slack Bot Update", "emoji": True},
+        "text": {"type": "plain_text", "text": clean_text or "Aryhant Update", "emoji": True},
     }
 
 
@@ -66,12 +66,12 @@ def generate_slack_post(reply: str) -> dict[str, Any]:
     clean_reply = clean_math_text((reply or "").strip())
     if not clean_reply:
         return {
-            "text": "Slack Bot Update",
+            "text": "Aryhant Update",
             "blocks": [create_section_block("I did not produce a reply.")],
         }
 
     # Fallback text for mobile push notifications & screen readers
-    fallback_text = clean_reply[:200].replace("\n", " ") or "Slack Bot Update"
+    fallback_text = clean_reply[:200].replace("\n", " ") or "Aryhant Update"
 
     blocks: list[dict[str, Any]] = []
     paragraphs = [p.strip() for p in clean_reply.split("\n\n") if p.strip()]

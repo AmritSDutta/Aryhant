@@ -21,12 +21,12 @@ from typing import Any, Optional, Union
 class InfographicBranding:
     """Product-specific branding and copy for educational infographics."""
 
-    product_name: str = "Mitraa"
-    brand_title: str = "Mitraa INFOGRAPHICS"
+    product_name: str = "Aryhant"
+    brand_title: str = "Aryhant INFOGRAPHICS"
     header_subtitle: str = "Interactive AI Study Sheet • Visual Learning"
-    hero_label: str = "Mitraa STUDY BRAIN"
+    hero_label: str = "Aryhant STUDY BRAIN"
     icon_names: list[str] = field(default_factory=lambda: ["vedantu.jpg", "icon.ico"])
-    running_header: str = "Mitraa INFOGRAPHICS • Interactive AI Study Sheet"
+    running_header: str = "Aryhant INFOGRAPHICS • Interactive AI Study Sheet"
     disclaimer: str = "Disclaimer: AI generated, check before applying in real life"
     footer_format: str = "{product_name} • Lesson Study Infographic • Saved automatically to {save_path} • All rights reserved"
     takeaways_header: str = "Key Takeaways:"
@@ -70,7 +70,7 @@ def get_current_date_str() -> str:
 
 def get_infographics_dir() -> Path:
     """Return local temporary directory for infographic study sheets."""
-    target = Path(tempfile.gettempdir()) / "mitra_infographics"
+    target = Path(tempfile.gettempdir()) / "aryhant_infographics"
     target.mkdir(parents=True, exist_ok=True)
     return target
 

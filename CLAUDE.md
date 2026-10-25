@@ -38,6 +38,36 @@ python -m pytest -q tests/test_slack.py::test_name     # one test
 
 Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies; without it API endpoints return demo responses. Without the editable install, add `--app-dir src` to uvicorn or set `PYTHONPATH=src`.
 
+## Folder Structure
+
+```text
+├── docs/                           # docs7 documentation site (docs.json, *.mdx)
+├── proxies/                        # Edge proxies (Cloudflare Worker Slack ACK & QStash forwarder)
+├── src/chat_agent/                 # Primary application package
+│   ├── agents/                     # Mitra persona, system prompts, question generator, LLM runner
+│   │   ├── prompt.py               # Persona & ICSE Grade 5 pedagogical system instructions
+│   │   ├── question_generator.py   # Practice question generator agent
+│   │   └── runner.py               # Async LLM runner (Gemini direct / OpenAI fallback, tool loops)
+│   ├── config/                     # Settings, Auth0, rate limiting, QStash auth, logging, Grafana
+│   ├── infographics/               # ReportLab PDF builders (study notes, infographics, diagrams, theme)
+│   │   ├── builder.py              # Lesson infographic posters
+│   │   ├── canvas.py               # Custom ReportLab canvas
+│   │   ├── config.py               # Infographic layout constants & styles
+│   │   ├── diagrams.py             # Procedural math & science vector diagrams
+│   │   ├── notes_builder.py        # Handwritten notebook-style study notes PDF generator
+│   │   └── theme.py                # Color palettes and branding definitions
+│   ├── schema/                     # Pydantic schemas and data models
+│   ├── slack/                      # Slack Bolt Socket Mode, HTTP events API, Block Kit formatting
+│   ├── tools/                      # Agent tools (web search, PDF generators, Slack uploader, time)
+│   ├── utils/                      # Input validation, math formatter, multimodal, fast decision
+│   ├── app.py                      # FastAPI server (/api/chat, /api/health, /webhooks/*)
+│   ├── main.py                     # CLI entry point (serve, chat, slack subcommands)
+│   └── webhooks.py                 # Webhook authentication & endpoints
+├── tests/                          # Hermetic test suite with mocked external services
+├── Dockerfile                      # Production container image definition
+└── pyproject.toml                  # Project metadata, dependencies, and pytest configuration
+```
+
 ## Architecture
 
 Direct Google GenAI & OpenAI model execution engine behind every channel:

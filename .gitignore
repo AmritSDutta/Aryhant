@@ -104,4 +104,6 @@ coverage.xml
 *.iso
 
 # Project-Specific Local Overrides
-cloud_deply_cmd.md
+cloud_deploy_cmd.md
+
+

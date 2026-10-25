@@ -44,10 +44,13 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 ├── docs/                           # docs7 documentation site (docs.json, *.mdx)
 ├── proxies/                        # Edge proxies (Cloudflare Worker Slack ACK & QStash forwarder)
 ├── src/chat_agent/                 # Primary application package
-│   ├── agents/                     # Aryhant persona, system prompts, question generator, LLM runner
+│   ├── agents/                     # Aryhant persona, system prompts, question generator, LLM runners
+│   │   ├── gemini_model_runner.py  # Direct Gemini model runner (3x retries, OpenAI fallback, tool loops)
+│   │   ├── model_runner.py         # ModelRunner Protocol & get_model_runner() factory
+│   │   ├── nebius_model_runner.py  # Nebius OpenAI-compatible model runner
 │   │   ├── prompt.py               # Persona & ICSE Grade 5 pedagogical system instructions
 │   │   ├── question_generator.py   # Practice question generator agent
-│   │   └── runner.py               # Async LLM runner (Gemini direct / OpenAI fallback, tool loops)
+│   │   └── runner.py               # Orchestrator: text clipping, multimodal validation, model delegation
 │   ├── config/                     # Settings, Auth0, rate limiting, QStash auth, logging, Grafana
 │   ├── infographics/               # ReportLab PDF builders (study notes, infographics, diagrams, theme)
 │   │   ├── builder.py              # Lesson infographic posters
@@ -73,7 +76,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 Direct Google GenAI & OpenAI model execution engine behind every channel:
 
 - `src/chat_agent/agents/prompt.py` — Aryhant persona: versatile daily AI companion and assistant (general inquiries, planning, writing, problem-solving, coding last) with specialized St. Xavier's Grade 5 ICSE pedagogical capabilities (plain-text math `3/5`, `cm²`, `+`, `-`, `x`, `÷`, 5–10 numbered practice questions, answer keys at end) and universal visual PDF notes generation across any topic.
-- `src/chat_agent/agents/runner.py` — `run_agent()` is the single async entry point: text + optional `attachments: list[tuple[bytes, str]]` → moderation → `google.genai.types.Content`. Executes up to 3 randomized attempts across `FIRST_CHOICE_MODELS` via direct `google.genai.Client` with manual tool execution loop (`_execute_tool_call`), falling back to direct `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` / `httpx`. In-memory conversation history is managed with bounded deque and prior-turn binary attachment pruning.
+- `src/chat_agent/agents/model_runner.py` & `src/chat_agent/agents/gemini_model_runner.py` — Decoupled model execution: `ModelRunner` interface protocol with `get_model_runner()` factory dispatching to `GeminiModelRunner` (executes 3 randomized attempts across `FIRST_CHOICE_MODELS` with tool loop and `FALLBACK_GPT_MODEL` failover) or `NebiusModelRunner`. `runner.py` acts as pure orchestrator for clipping, moderation, and dispatch.
 - `src/chat_agent/infographics/` — ReportLab handwritten notebook-style study notes (`notes_builder.py`), lesson infographic posters (`builder.py`), procedural math & science diagrams (`diagrams.py`), and styling/branding (`theme.py`, `branding.json`).
 - `src/chat_agent/tools/tool_factory.py` — Direct tools: `get_current_time` (IST), `search_web` (multi-provider weighted search pool with fallback), `generate_study_notes_pdf` & `generate_infographic_pdf` (compile PDF and auto-upload to Slack in a background thread), and `upload_file_to_slack` (Slack external file upload API).
 - Channels (all call `run_agent`): `slack/slack_app.py` (Slack Bolt Socket Mode with `AsyncSocketModeHandler`), `slack/slack_http.py` (webhook events, threaded replies), `app.py` (FastAPI `/api/*`, `/webhooks/*`, rate limiting, QStash signature verification via `qstash_authentication.py`; webhook auth via `webhooks.py`), `main.py` (CLI orchestrator).

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai import types
 
-from chat_agent.agents.runner import _prune_prior_binary_parts
+from chat_agent.agents.gemini_model_runner import _prune_prior_binary_parts
 from chat_agent.config import settings
 from chat_agent.slack.slack_http import (
     handle_slack_payload,
@@ -300,7 +300,7 @@ async def test_handle_slack_payload_error_evicts_dedup():
 
 @pytest.mark.asyncio
 async def test_prior_turn_binary_pruning_in_history():
-    from chat_agent.agents import runner as runner_mod
+    from chat_agent.agents import gemini_model_runner as runner_mod
 
     session_id = "s_test_prune_1"
     runner_mod._HISTORY.pop(session_id, None)

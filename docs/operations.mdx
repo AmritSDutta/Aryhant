@@ -13,11 +13,15 @@ All settings are managed via environment variables and loaded into the Pydantic 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `APP_NAME` | `"aryhant"` | Application name identifier |
+| `MODEL_PROVIDER` | `"gemini"` | Model provider selection (`"gemini"` or `"nebius"`) |
 | `USER_LLM_MODEL` | `"gemini-flash-lite-latest"` | Primary Gemini model identifier |
 | `FIRST_CHOICE_MODELS` | `["gemini-flash-lite-latest", "gemini-2.5-flash"]` | Candidate models for Phase 1 randomized attempts |
 | `FALLBACK_GPT_MODEL` | `"gpt-6-luna"` | OpenAI failover model identifier for Phase 2 |
 | `USER_LLM_API_KEY` | `""` | Gemini API key (checked with `GEMINI_API_KEY` and `GOOGLE_API_KEY`) |
 | `OPENAI_API_KEY` | `""` | OpenAI API key for `FALLBACK_GPT_MODEL` and search summarization |
+| `NEBIUS_API_KEY` | `""` | Nebius Studio API key |
+| `NEBIUS_BASE_URL` | `"https://api.tokenfactory.nebius.com/v1"` | Nebius Token Factory base URL |
+| `NEBIUS_MODEL` | `"nvidia/Nemotron-3.5-Super-VL"` | Vision-language model identifier |
 | `MAX_INPUT_CHARS` | `4000` | Input prompt character truncation limit |
 | `MAX_OUTPUT_TOKENS` | `256` | Maximum output tokens generated per turn |
 

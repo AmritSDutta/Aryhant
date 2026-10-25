@@ -37,12 +37,16 @@ class Settings(BaseSettings):
 
     # Core App & LLM
     APP_NAME: str = "aryhant"
+    MODEL_PROVIDER: str = "gemini"
     USER_LLM_MODEL: str = "gemini-flash-lite-latest"
     INFERENCE_MODEL: str = "gemini-flash-lite-latest"
     FALLBACK_MODEL: str = "gemini-3.1-flash-lite"
     USER_LLM_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    NEBIUS_API_KEY: str = ""
+    NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
+    NEBIUS_MODEL: str = "nvidia/Nemotron-3.5-Super-VL"
     MAX_INPUT_CHARS: int = 5000
     MAX_OUTPUT_TOKENS: int = 2048
     REPLY_ONLY_TO_MENTIONS: bool = True
@@ -233,6 +237,10 @@ class Settings(BaseSettings):
     @property
     def llm_ready(self) -> bool:
         return bool(self.api_key)
+
+    @property
+    def nebius_ready(self) -> bool:
+        return bool(self.NEBIUS_API_KEY or os.getenv("NEBIUS_API_KEY", ""))
 
     @property
     def slack_ready(self) -> bool:

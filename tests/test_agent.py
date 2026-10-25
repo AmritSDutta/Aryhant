@@ -4,6 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from chat_agent.agents.gemini_model_runner import (
+    GeminiModelRunner,
+    _execute_tool_call,
+    _run_with_retry_and_fallback,
+)
+from chat_agent.agents.model_runner import ModelRunner, get_model_runner
+from chat_agent.agents.nebius_model_runner import NebiusModelRunner
 from chat_agent.agents.runner import clip_text, run_agent
 from chat_agent.app import ChatRequest
 from chat_agent.tools.tool_factory import get_current_time
@@ -34,6 +41,20 @@ def test_get_current_time_tool():
     assert res["timezone"] == "IST (UTC+5:30)"
 
 
+def test_model_runner_protocol_compliance():
+    """Verify Gemini and Nebius runners satisfy the ModelRunner protocol."""
+    assert isinstance(GeminiModelRunner(), ModelRunner)
+    assert isinstance(NebiusModelRunner(), ModelRunner)
+
+
+def test_get_model_runner_factory():
+    """Verify factory returns appropriate runner instances."""
+    assert isinstance(get_model_runner("gemini"), GeminiModelRunner)
+    assert isinstance(get_model_runner("nebius"), NebiusModelRunner)
+    with pytest.raises(ValueError, match="Unsupported model provider"):
+        get_model_runner("unsupported_provider")
+
+
 @pytest.mark.asyncio
 async def test_run_agent_empty_prompt():
     reply = await run_agent("u1", "s1", "")
@@ -52,7 +73,7 @@ async def test_run_agent_malicious_prompt_interception():
 @pytest.mark.asyncio
 async def test_run_agent_direct_genai_reply():
     with patch(
-        "chat_agent.agents.runner._call_gemini",
+        "chat_agent.agents.gemini_model_runner._call_gemini",
         new_callable=AsyncMock,
         return_value="Hello from AI model",
     ) as mock_call:
@@ -65,16 +86,14 @@ async def test_run_agent_direct_genai_reply():
 async def test_run_agent_retry_succeeds_on_third_attempt():
     from google.genai import types
 
-    from chat_agent.agents.runner import _run_with_retry_and_fallback
-
     content = types.Content(parts=[types.Part.from_text(text="test")])
 
     with patch(
-        "chat_agent.agents.runner._call_gemini",
+        "chat_agent.agents.gemini_model_runner._call_gemini",
         new_callable=AsyncMock,
         side_effect=["", Exception("503 UNAVAILABLE: high demand"), "Recovered reply"],
     ) as mock_call, patch(
-        "chat_agent.agents.runner._async_backoff", new_callable=AsyncMock
+        "chat_agent.agents.gemini_model_runner._async_backoff", new_callable=AsyncMock
     ):
         reply = await _run_with_retry_and_fallback("u1", "s-retry", content)
         assert reply == "Recovered reply"
@@ -84,8 +103,6 @@ async def test_run_agent_retry_succeeds_on_third_attempt():
 @pytest.mark.asyncio
 async def test_run_agent_fallback_openai_completion_when_gemini_fails():
     from google.genai import types
-
-    from chat_agent.agents.runner import _run_with_retry_and_fallback
 
     content = types.Content(parts=[types.Part.from_text(text="test question")])
 
@@ -97,9 +114,9 @@ async def test_run_agent_fallback_openai_completion_when_gemini_fails():
     mock_client.chat.completions.create = AsyncMock(return_value=mock_resp)
 
     with patch(
-        "chat_agent.agents.runner._call_gemini", side_effect=Exception("GenAI unavailable")
+        "chat_agent.agents.gemini_model_runner._call_gemini", side_effect=Exception("GenAI unavailable")
     ), patch(
-        "chat_agent.agents.runner._async_backoff", new_callable=AsyncMock
+        "chat_agent.agents.gemini_model_runner._async_backoff", new_callable=AsyncMock
     ), patch(
         "openai.AsyncOpenAI", return_value=mock_client
     ):
@@ -112,8 +129,6 @@ async def test_run_agent_fallback_openai_httpx_when_module_missing():
     import sys
     from google.genai import types
 
-    from chat_agent.agents.runner import _run_with_retry_and_fallback
-
     content = types.Content(parts=[types.Part.from_text(text="test question")])
 
     mock_http_resp = MagicMock()
@@ -124,9 +139,9 @@ async def test_run_agent_fallback_openai_httpx_when_module_missing():
     mock_http_client.__aenter__.return_value.post = AsyncMock(return_value=mock_http_resp)
 
     with patch(
-        "chat_agent.agents.runner._call_gemini", side_effect=Exception("GenAI failed")
+        "chat_agent.agents.gemini_model_runner._call_gemini", side_effect=Exception("GenAI failed")
     ), patch(
-        "chat_agent.agents.runner._async_backoff", new_callable=AsyncMock
+        "chat_agent.agents.gemini_model_runner._async_backoff", new_callable=AsyncMock
     ), patch.dict(
         sys.modules, {"openai": None}
     ), patch(
@@ -140,14 +155,12 @@ async def test_run_agent_fallback_openai_httpx_when_module_missing():
 async def test_run_agent_all_retries_and_fallback_fail():
     from google.genai import types
 
-    from chat_agent.agents.runner import _run_with_retry_and_fallback
-
     content = types.Content(parts=[types.Part.from_text(text="test")])
 
     with patch(
-        "chat_agent.agents.runner._call_gemini", side_effect=Exception("Fatal failure")
+        "chat_agent.agents.gemini_model_runner._call_gemini", side_effect=Exception("Fatal failure")
     ), patch(
-        "chat_agent.agents.runner._async_backoff", new_callable=AsyncMock
+        "chat_agent.agents.gemini_model_runner._async_backoff", new_callable=AsyncMock
     ), patch(
         "openai.AsyncOpenAI", side_effect=Exception("OpenAI API unreachable")
     ):
@@ -160,9 +173,9 @@ async def test_failed_attempt_does_not_duplicate_history():
     """A failed attempt must not leave duplicate user content in session history."""
     from google.genai import types
 
-    from chat_agent.agents import runner as runner_mod
+    from chat_agent.agents import gemini_model_runner as gmr
 
-    runner_mod._HISTORY.clear()
+    gmr._HISTORY.clear()
     content = types.Content(parts=[types.Part.from_text(text="test")])
     calls = {"count": 0}
 
@@ -172,14 +185,14 @@ async def test_failed_attempt_does_not_duplicate_history():
             return ""
         return "Recovered reply"
 
-    with patch.object(runner_mod, "_call_gemini", fake_call), patch(
-        "chat_agent.agents.runner._async_backoff", new_callable=AsyncMock
+    with patch.object(gmr, "_call_gemini", fake_call), patch(
+        "chat_agent.agents.gemini_model_runner._async_backoff", new_callable=AsyncMock
     ):
-        reply = await runner_mod._run_with_retry_and_fallback("u1", "s-hist", content)
+        reply = await gmr._run_with_retry_and_fallback("u1", "s-hist", content)
 
     assert reply == "Recovered reply"
     assert calls["count"] == 2
-    history = runner_mod._HISTORY["s-hist"]
+    history = gmr._HISTORY["s-hist"]
     assert len(history) == 2  # one user content + one model reply
     assert history[0].parts[0].text == "test"
 
@@ -187,8 +200,6 @@ async def test_failed_attempt_does_not_duplicate_history():
 @pytest.mark.asyncio
 async def test_execute_tool_call_runs_registered_tool():
     from google.genai import types
-
-    from chat_agent.agents.runner import _execute_tool_call
 
     fc = types.FunctionCall(name="get_current_time", args={})
     part = await _execute_tool_call(fc)
@@ -199,8 +210,88 @@ async def test_execute_tool_call_runs_registered_tool():
 async def test_execute_tool_call_unknown_tool():
     from google.genai import types
 
-    from chat_agent.agents.runner import _execute_tool_call
-
     fc = types.FunctionCall(name="does_not_exist", args={})
     part = await _execute_tool_call(fc)
     assert "Unknown tool" in part.function_response.response["error"]
+
+
+@pytest.mark.asyncio
+async def test_nebius_model_runner_success():
+    from google.genai import types
+
+    runner = NebiusModelRunner()
+    content = types.Content(parts=[types.Part.from_text(text="hello nebius")])
+
+    with patch(
+        "chat_agent.agents.nebius_model_runner._call_nebius_completion",
+        new_callable=AsyncMock,
+        return_value="Nebius response",
+    ), patch(
+        "chat_agent.agents.nebius_model_runner.settings.NEBIUS_API_KEY", "mock-nebius-key"
+    ):
+        reply = await runner.run("u1", "s-nebius", content)
+        assert reply == "Nebius response"
+
+
+@pytest.mark.asyncio
+async def test_nebius_model_runner_multimodal_vision_input():
+    from google.genai import types
+
+    runner = NebiusModelRunner()
+    part_text = types.Part.from_text(text="Describe this picture")
+    part_image = types.Part.from_bytes(data=b"fake-image-bytes", mime_type="image/png")
+    content = types.Content(parts=[part_text, part_image])
+
+    with patch(
+        "chat_agent.agents.nebius_model_runner._call_nebius_completion",
+        new_callable=AsyncMock,
+        return_value="Image description from Nemotron",
+    ) as mock_call, patch(
+        "chat_agent.agents.nebius_model_runner.settings.NEBIUS_API_KEY", "mock-nebius-key"
+    ):
+        reply = await runner.run("u1", "s-nebius-vision", content)
+        assert reply == "Image description from Nemotron"
+        call_messages = mock_call.call_args[1]["messages"]
+        user_msg = call_messages[-1]
+        assert isinstance(user_msg["content"], list)
+        assert user_msg["content"][0]["type"] == "text"
+        assert user_msg["content"][1]["type"] == "image_url"
+        assert user_msg["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.asyncio
+async def test_nebius_model_runner_tool_execution():
+    from chat_agent.agents.nebius_model_runner import _call_nebius_completion
+
+    mock_client = AsyncMock()
+
+    mock_tc = MagicMock()
+    mock_tc.id = "call_time_1"
+    mock_tc.function.name = "get_current_time"
+    mock_tc.function.arguments = "{}"
+
+    mock_msg_round1 = MagicMock()
+    mock_msg_round1.content = None
+    mock_msg_round1.tool_calls = [mock_tc]
+
+    mock_resp1 = MagicMock()
+    mock_resp1.choices = [MagicMock(message=mock_msg_round1)]
+
+    mock_msg_round2 = MagicMock()
+    mock_msg_round2.content = "Current time is 10:00 PM IST"
+    mock_msg_round2.tool_calls = None
+
+    mock_resp2 = MagicMock()
+    mock_resp2.choices = [MagicMock(message=mock_msg_round2)]
+
+    mock_client.chat.completions.create = AsyncMock(side_effect=[mock_resp1, mock_resp2])
+
+    with patch("openai.AsyncOpenAI", return_value=mock_client):
+        reply = await _call_nebius_completion(
+            model="nvidia/Nemotron-3.5-Super-VL",
+            messages=[{"role": "user", "content": "What time is it?"}],
+            api_key="mock-key",
+            base_url="https://api.tokenfactory.nebius.com/v1",
+        )
+        assert reply == "Current time is 10:00 PM IST"
+        assert mock_client.chat.completions.create.call_count == 2

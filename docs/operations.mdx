@@ -114,12 +114,12 @@ Deploy to Google Cloud Run with scale-to-zero configuration and Google Secret Ma
 
 ```bash
 # Build and push image
-docker build -t gcr.io/YOUR_PROJECT_ID/slack-bot .
-docker push gcr.io/YOUR_PROJECT_ID/slack-bot
+docker build -t gcr.io/YOUR_PROJECT_ID/aryhant .
+docker push gcr.io/YOUR_PROJECT_ID/aryhant
 
 # Deploy to Cloud Run
-gcloud run deploy slack-bot \
-  --image=gcr.io/YOUR_PROJECT_ID/slack-bot \
+gcloud run deploy aryhant \
+  --image=gcr.io/YOUR_PROJECT_ID/aryhant \
   --region=us-central1 \
   --cpu=2 \
   --memory=1024Mi \

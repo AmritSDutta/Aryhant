@@ -5,7 +5,9 @@ description: Automated ICSE Grade 5 practice question generation with candidate 
 
 # Question Generation & TypeSafe Curation
 
-Aryhant features a specialized two-stage question generation and evaluation pipeline designed for St. Xavier's Grade 5 ICSE syllabus. The system uses a secondary LLM agent to generate an oversampled batch of candidate practice questions and pedagogical hints, followed by TypeSafe AI's System One model (`Jev`) to evaluate hint clarity and select the top 10 highest-quality items.
+Aryhant features a specialized two-stage question generation and evaluation pipeline designed for St. Xavier's Grade 5 ICSE syllabus. A provider-selectable generator package produces an oversampled batch of candidate practice questions and pedagogical hints, then TypeSafe AI's System One model (`Noul`) evaluates hint clarity and selects the top 10 highest-quality items.
+
+The whole pipeline is exposed to the agent as the `generate_practice_questions(topic)` tool, and the underlying functions (`generate_candidate_questions`, `generate_curated_questions`) can be imported directly.
 
 ## Generation & Curation Pipeline
 
@@ -13,8 +15,10 @@ Aryhant features a specialized two-stage question generation and evaluation pipe
 flowchart TD
   subgraph Stage1["Stage 1 - Secondary Generation Agent"]
     Prompt["QA_GENERATOR_INSTRUCTION - ICSE Grade 5 Pedagogical Rules"]
-    GenAI["Primary: Google GenAI - response_schema=QuestionAnswerSchema"]
-    OpenAI["Fallback: OpenAI - json_object mode"]
+    Factory["get_question_generator - QUESTION_GENERATOR_PROVIDER"]
+    GenAI["GeminiQuestionGenerator - response_schema=QuestionAnswerSchema"]
+    Nebius["NebiusQuestionGenerator - OpenAI-compatible json_object"]
+    OpenAI["OpenAI Fallback - json_object mode"]
     Candidates["15 to 20 Candidate Questions with Hints"]
   end
   subgraph Stage2["Stage 2 - TypeSafe Fast Decision Engine"]
@@ -23,9 +27,14 @@ flowchart TD
     Score["Calibrated Probabilities - 0.0 to 1.0"]
     Top10["Top 10 Highest-Scoring Curated Questions"]
   end
-  Prompt --> GenAI
-  GenAI -.->|Transient Failure| OpenAI
+  Prompt --> Factory
+  Factory -->|gemini| GenAI
+  Factory -->|nebius| Nebius
+  GenAI -.->|Failover| Nebius
+  GenAI -.->|Failover| OpenAI
+  Nebius -.->|Failover| OpenAI
   GenAI --> Candidates
+  Nebius --> Candidates
   OpenAI --> Candidates
   Candidates --> State
   State --> Noul
@@ -43,6 +52,14 @@ flowchart TD
         <Tree.File name="question_generator.py" highlight />
         <Tree.File name="runner.py" />
       </Tree.Folder>
+      <Tree.Folder name="question_generator" defaultOpen>
+        <Tree.File name="base_question_generator.py" highlight />
+        <Tree.File name="gemini_question_generator.py" highlight />
+        <Tree.File name="nebius_question_generator.py" highlight />
+      </Tree.Folder>
+      <Tree.Folder name="tools" defaultOpen>
+        <Tree.File name="tool_factory.py" highlight />
+      </Tree.Folder>
       <Tree.Folder name="schema" defaultOpen>
         <Tree.File name="fundamental_schema.py" highlight />
       </Tree.Folder>
@@ -59,7 +76,27 @@ flowchart TD
 
 ## 1. Secondary Generation Agent
 
-The secondary question generator operates in `src/chat_agent/agents/question_generator.py` and relies on `QA_GENERATOR_INSTRUCTION` defined in `src/chat_agent/agents/prompt.py`.
+Generation is modularized into a dedicated package, `src/chat_agent/question_generator/`, which is re-exported through the facade `src/chat_agent/agents/question_generator.py`. All providers share `QA_GENERATOR_INSTRUCTION` defined in `src/chat_agent/agents/prompt.py`.
+
+| File | Role |
+| :--- | :--- |
+| `base_question_generator.py` | `BaseQuestionGenerator` ABC plus shared helpers (`_get_genai_client`, `_call_openai_compatible_questions`, `_parse_json_questions`). |
+| `gemini_question_generator.py` | `GeminiQuestionGenerator` — primary structured generation via `google.genai` `response_schema`. |
+| `nebius_question_generator.py` | `NebiusQuestionGenerator` — OpenAI-compatible JSON generation against Nebius Token Factory. |
+
+### Provider Selection
+
+`get_question_generator(provider=None)` returns a generator instance. It resolves the provider from the explicit argument, then the `QUESTION_GENERATOR_PROVIDER` setting (default `"nebius"`):
+
+```python
+def get_question_generator(provider: str | None = None) -> BaseQuestionGenerator:
+    """Return a QuestionGenerator instance for the configured provider."""
+```
+
+### Failover Chain
+
+- **`GeminiQuestionGenerator`**: Google GenAI structured output first, then a Nebius OpenAI-compatible endpoint (`NEBIUS_QUESTION_FALLBACK_MODEL`, default `nvidia/nemotron-3-super-120b-a12b`) if a Nebius key is present, then OpenAI (`FALLBACK_GPT_MODEL`) as a last resort.
+- **`NebiusQuestionGenerator`**: primary `NEBIUS_QUESTION_MODEL` (default `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`), then failover to `NEBIUS_QUESTION_FALLBACK_MODEL`, then OpenAI if configured.
 
 ### Pedagogical Guidelines
 1. **Target Audience**: St. Xavier's Grade 5 students (~10 years old, ICSE curriculum).
@@ -67,21 +104,38 @@ The secondary question generator operates in `src/chat_agent/agents/question_gen
 3. **Guiding Hints**: Hints must guide the student's problem-solving reasoning without revealing the final answer directly.
 4. **Plain-Text Math**: Strict avoidance of LaTeX markup (`$...$`, `\\frac`). Plain-text formatting (`3/5`, `cm²`, `x`, `÷`) is strictly enforced.
 
-### Function Signature
+### Function Signatures
 ```python
 async def generate_candidate_questions(
     topic: str,
     min_count: int = 15,
     max_count: int = 20,
+    provider: str | None = None,
+    generator: BaseQuestionGenerator | None = None,
 ) -> list[QuestionAnswerSchema]:
-    """Generate 15-20 candidate questions with pedagogical hints using the secondary LLM agent."""
+    """Generate raw candidate practice questions for the requested topic."""
+
+async def generate_curated_questions(
+    topic: str,
+    provider: str | None = None,
+    generator: BaseQuestionGenerator | None = None,
+) -> list[QuestionAnswerSchema]:
+    """Generate candidates and return the top 10 scored by TypeSafe AI (graceful fallback)."""
 ```
+
+### Agent Tool
+```python
+def generate_practice_questions(topic: str) -> dict:
+    """Generate structured ICSE Grade 5 practice questions and hints for an academic topic."""
+```
+
+`generate_practice_questions` is registered in both `gemini_model_runner.py` and `nebius_model_runner.py`. It bridges the async pipeline into the synchronous tool-calling loop (running `generate_curated_questions` on a worker thread when an event loop is already active) and returns `{"status", "topic", "count", "questions"}`. The system prompt requires the agent to call this tool for any practice questions, worksheets, quizzes, or question sets.
 
 ---
 
 ## 2. TypeSafe AI Fast Decision Engine
 
-The curation engine in `src/chat_agent/utils/fast_decision/typesafe_integrator.py` uses TypeSafe's **System One** API (`Jev`) via the `typesafe-sdk`.
+The curation engine in `src/chat_agent/utils/fast_decision/typesafe_integrator.py` uses TypeSafe's **System One** API (`client.system_one`) with `Noul` primitives via the `typesafe-sdk`.
 
 ### Why System One?
 Unlike autoregressive chat models that generate textual explanations, TypeSafe's System One model directly returns typed decisions and calibrated probabilities in milliseconds.
@@ -129,7 +183,9 @@ The question pipeline is built for high availability and zero disruption:
 | `TYPESAFE_API_KEY` configured & valid | Full 2-stage pipeline: candidates generated $\rightarrow$ hints scored via TypeSafe $\rightarrow$ top 10 curated questions returned. |
 | `TYPESAFE_API_KEY` missing (`typesafe_ready == False`) | Graceful bypass: logs info message and returns the first 10 candidate questions without scoring. |
 | TypeSafe API timeout / network error | Exception catch & fallback: logs warning and immediately returns the first 10 candidate questions. |
-| Primary Google GenAI failure | Automatic failover to OpenAI structured `json_object` completion. |
+| Gemini generator failure | Automatic failover to the Nebius OpenAI-compatible endpoint, then OpenAI `json_object` completion. |
+| Nebius generator failure | Automatic failover to `NEBIUS_QUESTION_FALLBACK_MODEL`, then OpenAI if configured. |
+| No candidates generated | `generate_curated_questions` returns an empty list; the tool reports `status: "empty"`. |
 
 ---
 

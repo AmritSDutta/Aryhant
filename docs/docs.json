@@ -13,7 +13,7 @@
       { "group": "Setup", "pages": ["prerequisites"] },
       { "group": "Channels", "pages": ["slack", "email", "multimodal"] },
       { "group": "API & Auth", "pages": ["api-reference"] },
-      { "group": "Capabilities & Tools", "pages": ["web-search", "study-notes", "question-generation", "nebius", "observability"] },
+      { "group": "Capabilities & Tools", "pages": ["web-search", "study-notes", "question-generation", "math-tool", "nebius", "observability"] },
 
       { "group": "Operations & Deployment", "pages": ["operations"] },
       { "group": "Troubleshooting", "pages": ["faq"] }

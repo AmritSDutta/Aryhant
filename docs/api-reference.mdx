@@ -125,20 +125,36 @@ class QuestionAnswerSchema(BaseModel):
 ```
 
 ### Question Generator Functions
-Exported from `src/chat_agent/agents/`:
+Exported from `src/chat_agent/question_generator/` and re-exported via the facade `src/chat_agent/agents/question_generator.py`:
 
 ```python
+def get_question_generator(provider: str | None = None) -> BaseQuestionGenerator:
+    """Return a generator instance for the configured provider (gemini | nebius)."""
+
 async def generate_candidate_questions(
     topic: str,
     min_count: int = 15,
     max_count: int = 20,
+    provider: str | None = None,
+    generator: BaseQuestionGenerator | None = None,
 ) -> list[QuestionAnswerSchema]:
-    """Generate 15-20 candidate practice questions and hints using the secondary LLM agent."""
+    """Generate raw candidate practice questions for the requested topic."""
 
 async def generate_curated_questions(
     topic: str,
+    provider: str | None = None,
+    generator: BaseQuestionGenerator | None = None,
 ) -> list[QuestionAnswerSchema]:
-    """Generate 15-20 candidates and return the top 10 curated questions scored via TypeSafe AI."""
+    """Generate candidates and return the top 10 curated questions scored via TypeSafe AI."""
+```
+
+### Math Tool
+Exported from `src/chat_agent/tools/math_tool.py` and bound in both runners:
+
+```python
+def calculate_math(expression: str) -> dict:
+    """Safely evaluate a math expression using AST parsing (no eval).
+    Returns {"status": "ok", "result": ..., "value": ...} or {"status": "error", "message": ...}."""
 ```
 
 ### TypeSafe Feedback Evaluator

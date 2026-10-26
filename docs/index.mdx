@@ -9,6 +9,8 @@ A multimodal daily AI companion and educational assistant that serves chat input
 
 ## System Architecture
 
+The request path and the model execution core:
+
 ```mermaid
 flowchart TD
   subgraph Clients["Inbound Channels"]
@@ -16,28 +18,13 @@ flowchart TD
     SlackUser["Slack - Socket Mode or HTTP Events"]
     EmailClient["Email - IMAP or Webhook"]
   end
-  subgraph Edge["Edge and Gateway Layer"]
-    CF["Cloudflare Worker - Instant ACK"]
-    QS["Upstash QStash - Queue and Retry"]
-    FastAPI["FastAPI App - Rate Limiting and Auth0"]
-  end
-  subgraph Core["Direct Model Execution Engine"]
-    Runner["Direct Runner - runner.py"]
-    GenAI["Direct Google GenAI - FIRST_CHOICE_MODELS"]
-    GPT["Direct OpenAI Fallback - FALLBACK_GPT_MODEL"]
-    History["Bounded In-Memory History - Binary Pruning"]
-  end
-  subgraph Tools["Tools and Infographics Engine"]
-    TimeTool["get_current_time - Indian Standard Time IST"]
-    SearchTool["search_web - 5-Provider Search Pool"]
-    NotesTool["generate_study_notes_pdf - ReportLab Notes"]
-    PosterTool["generate_infographic_pdf - Visual Posters"]
-    Diagrams["diagrams.py - Procedural Diagrams"]
-    UploadTool["upload_file_to_slack - files.uploadExternal"]
-    PostGen["generate_slack_post - Block Kit Formatter"]
-    QAEngine["question_generator.py - Secondary Agent"]
-    TypeSafe["typesafe_integrator.py - System One Noul Curation"]
-  end
+  CF["Cloudflare Worker - Instant ACK"]
+  QS["Upstash QStash - Queue and Retry"]
+  FastAPI["FastAPI App - Rate Limiting and Auth0"]
+  Runner["Direct Runner - runner.py"]
+  GenAI["Direct Google GenAI - FIRST_CHOICE_MODELS"]
+  GPT["Direct OpenAI Fallback - FALLBACK_GPT_MODEL"]
+  History["Bounded In-Memory History - Binary Pruning"]
   Browser --> FastAPI
   SlackUser -->|Socket Mode| Runner
   SlackUser -->|HTTP Events| CF
@@ -48,26 +35,45 @@ flowchart TD
   Runner --> History
   Runner --> GenAI
   GenAI -->|Transient Failover| GPT
+```
+
+The tools the runner dispatches to, and the background PDF pipeline:
+
+```mermaid
+flowchart LR
+  Runner["Direct Runner - runner.py"]
+  TimeTool["get_current_time - IST"]
+  SearchTool["search_web - 5-Provider Search Pool"]
+  MathTool["calculate_math - Safe AST"]
+  NotesTool["generate_study_notes_pdf"]
+  PosterTool["generate_infographic_pdf"]
+  PracticeTool["generate_practice_questions"]
+  PostGen["generate_slack_post"]
+  Curate["question_generator + System One Noul"]
+  Diagrams["diagrams.py - Procedural Diagrams"]
+  UploadTool["upload_file_to_slack"]
   Runner --> TimeTool
   Runner --> SearchTool
+  Runner --> MathTool
   Runner --> NotesTool
   Runner --> PosterTool
-  Runner --> QAEngine
-  QAEngine --> TypeSafe
+  Runner --> PracticeTool
+  Runner --> PostGen
+  PracticeTool --> Curate
   NotesTool --> Diagrams
   PosterTool --> Diagrams
-  NotesTool -->|Background Auto-Upload| UploadTool
-  PosterTool -->|Background Auto-Upload| UploadTool
-  Runner --> PostGen
+  NotesTool -->|Auto-Upload| UploadTool
+  PosterTool -->|Auto-Upload| UploadTool
 ```
 
 ## Key Capabilities
 
 - **Versatile Daily AI Companion**: Provides thoughtful assistance across everyday inquiries, personal organization, writing, explanations, research, and general problem-solving, with technical/coding help available when requested.
 - **St. Xavier's ICSE Grade 5 Persona**: Calibrates academic guidance to ICSE standards, enforces plain-text math (`3/5`, `cm²`, `+`, `-`, `x`, `÷`, zero raw LaTeX), generates 5–10 numbered practice questions, and groups answer keys at the end.
-- **Question Generation & TypeSafe Curation**: Generates 15–20 candidate practice questions and hints via a secondary LLM agent (`QA_GENERATOR_INSTRUCTION`), and uses TypeSafe AI System One (`Noul`) for parallel hint scoring and top-10 curation.
+- **Question Generation & TypeSafe Curation**: A provider-selectable generator package (`question_generator/`) generates 15–20 candidate practice questions and hints, and the `generate_practice_questions(topic)` tool runs the full pipeline: candidates generation, then TypeSafe AI System One (`Noul`) parallel hint scoring and top-10 curation.
 - **Universal Visual Notes on Any Topic**: Compiles handwritten notebook-style PDFs (`generate_study_notes_pdf`) and visual posters (`generate_infographic_pdf`) on any subject (school lessons, technical guides, recipes, general learning) on background threads and auto-uploads them to Slack without delaying the text reply.
 - **Direct Multi-Model Engine with Failover**: Executes up to 3 randomized attempts across `FIRST_CHOICE_MODELS` via direct `google.genai.Client` with transient backoff, seamlessly falling back to `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` or native REST completions.
+- **Safe Math Evaluation Tool**: The `calculate_math(expression)` tool evaluates arithmetic, LCM, GCD/HCF, powers, roots, and multi-step expressions through Python's `ast` module with no `eval`, applying operator/function allowlists and exponent bounds.
 - **Procedural Math & Science Diagrams**: Generates crisp vector curves, geometric shapes, electrical circuits, and biological illustrations with pure ReportLab drawing primitives.
 - **Dual-Mode Slack Architecture**: Supports local development via native Slack Bolt Socket Mode (`AsyncSocketModeHandler`) and production scale-to-zero on Google Cloud Run via a Cloudflare Worker proxy and Upstash QStash retry queue.
 - **Rich Slack Block Kit Formatting**: Converts raw markdown into Slack Block Kit structures (`header`, `divider`, `section`, `context`) while enforcing Slack's 20-block ceiling (`MAX_BLOCKS = 20`) and 3000-character section limit.
@@ -98,6 +104,12 @@ flowchart TD
         <Tree.File name="question_generator.py" highlight />
         <Tree.File name="runner.py" highlight />
       </Tree.Folder>
+      <Tree.Folder name="question_generator" defaultOpen>
+        <Tree.File name="__init__.py" />
+        <Tree.File name="base_question_generator.py" highlight />
+        <Tree.File name="gemini_question_generator.py" highlight />
+        <Tree.File name="nebius_question_generator.py" highlight />
+      </Tree.Folder>
       <Tree.Folder name="config" defaultOpen>
         <Tree.File name="settings.py" highlight />
         <Tree.File name="auth0_config.py" />
@@ -126,6 +138,7 @@ flowchart TD
       </Tree.Folder>
       <Tree.Folder name="tools" defaultOpen>
         <Tree.File name="duckduckgo_search.py" highlight />
+        <Tree.File name="math_tool.py" highlight />
         <Tree.File name="tool_factory.py" highlight />
       </Tree.Folder>
       <Tree.Folder name="utils" defaultOpen>
@@ -167,7 +180,8 @@ flowchart TD
 
 - [Prerequisites](/prerequisites): Model keys, Slack OAuth scopes, event subscriptions, and token verification.
 - [Slack Channel](/slack): Socket Mode vs HTTP Events API, Cloudflare Worker forwarding, Block Kit post formatting, and PDF file uploads.
-- [Question Generation & TypeSafe Curation](/question-generation): Secondary generation agent, `QuestionAnswerSchema`, and TypeSafe System One hint scoring.
+- [Question Generation & TypeSafe Curation](/question-generation): Provider-selectable generator package, `QuestionAnswerSchema`, the `generate_practice_questions` tool, and TypeSafe System One hint scoring.
+- [Safe Math Tool](/math-tool): The `calculate_math` AST evaluator, supported operators/functions, and safety bounds.
 - [Study Notes & Infographics](/study-notes): ReportLab notebook notes, visual lesson posters, procedural diagrams, and auto-upload delivery.
 - [Email Channel](/email): Brevo template rendering, PDF attachments, IMAP/SMTP configuration, and planned AgentMail path.
 - [Multimodal Handling](/multimodal): File extraction, CDN downloads, moderation layers, and in-memory binary pruning.

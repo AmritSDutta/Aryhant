@@ -53,12 +53,14 @@ To preserve token budgets and prevent memory growth across multi-turn conversati
 
 ## Function Calling & Tool Support
 
-`NebiusModelRunner` binds four core application tools via standard OpenAI function definitions:
+`NebiusModelRunner` binds six core application tools via standard OpenAI function definitions:
 
 1. **`get_current_time`**: Returns current timestamps in Indian Standard Time (IST) and UTC.
 2. **`search_web`**: Multi-provider real-time search across DuckDuckGo, Tavily, Exa, Firecrawl, and Serper.
 3. **`generate_study_notes_pdf`**: Compiles handwritten notebook-style ReportLab PDFs and auto-uploads them to Slack.
 4. **`generate_infographic_pdf`**: Compiles visual lesson infographic posters and auto-uploads them to Slack.
+5. **`generate_practice_questions`**: Generates ICSE Grade 5 practice questions and hints for a topic.
+6. **`calculate_math`**: Safely evaluates a math expression via AST parsing (no `eval`).
 
 When Nemotron requests tool execution, the runner executes the function on a worker thread (`asyncio.to_thread`), formats the result as a `role: "tool"` message, and resubmits the context (up to 5 rounds) until generation completes.
 
@@ -80,11 +82,11 @@ NEBIUS_MODEL=nvidia/Nemotron-3.5-Super-VL
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `MODEL_PROVIDER` | `"gemini"` | Active engine selector: `"gemini"` or `"nebius"`. |
+| `MODEL_PROVIDER` | `"nebius"` | Active engine selector: `"gemini"` or `"nebius"`. |
 | `NEBIUS_API_KEY` | `""` | Nebius Token Factory API key. |
 | `NEBIUS_BASE_URL` | `"https://api.tokenfactory.nebius.com/v1"` | Nebius OpenAI-compatible endpoint base URL. |
 | `NEBIUS_MODEL` | `"nvidia/Nemotron-3.5-Super-VL"` | Target vision-language model identifier. |
-| `MAX_OUTPUT_TOKENS` | `2048` | Maximum output generation token budget. |
+| `MAX_OUTPUT_TOKENS` | `8000` | Maximum output generation token budget. |
 
 ## Resilience & Retry Strategy
 

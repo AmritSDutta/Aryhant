@@ -5,7 +5,7 @@ description: Multi-provider search tool pool supporting DuckDuckGo, Tavily, Exa,
 
 # Web search
 
-The agent is equipped with the `search_web` tool directly configured in the execution engine in `src/chat_agent/agents/gemini_model_runner.py` and `src/chat_agent/agents/nebius_model_runner.py` alongside `get_current_time`, `generate_study_notes_pdf`, and `generate_infographic_pdf`. The underlying implementation in `src/chat_agent/tools/tool_factory.py` manages a multi-provider search pool with weighted selection, automatic provider failover, response sanitization, and automatic summarization.
+The agent is equipped with the `search_web` tool directly configured in the execution engine in `src/chat_agent/agents/gemini_model_runner.py` and `src/chat_agent/agents/nebius_model_runner.py` alongside `get_current_time`, `generate_study_notes_pdf`, `generate_infographic_pdf`, `calculate_math`, and `generate_practice_questions`. The underlying implementation in `src/chat_agent/tools/tool_factory.py` manages a multi-provider search pool with weighted selection, automatic provider failover, response sanitization, and automatic summarization.
 
 ## Tool Integration
 
@@ -16,6 +16,8 @@ _TOOLS = [
     search_web,
     generate_study_notes_pdf,
     generate_infographic_pdf,
+    calculate_math,
+    generate_practice_questions,
 ]
 _TOOL_MAP = {fn.__name__: fn for fn in _TOOLS}
 ```

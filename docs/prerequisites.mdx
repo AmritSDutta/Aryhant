@@ -26,7 +26,8 @@ RuntimeError: Set USER_LLM_API_KEY in .env before starting the agent.
 
 | Variable | Purpose |
 | :--- | :--- |
-| `USER_LLM_API_KEY` | Gemini API key (checked with `GEMINI_API_KEY` and `GOOGLE_API_KEY` fallbacks) |
+| `USER_LLM_API_KEY` | Gemini API key (checked with `GEMINI_API_KEY` and `GOOGLE_API_KEY` fallbacks); gates `llm_ready` |
+| `NEBIUS_API_KEY` | Nebius Token Factory API key; required when `MODEL_PROVIDER=nebius` (the default) and used by the question generator |
 | `OPENAI_API_KEY` | OpenAI API key for `FALLBACK_GPT_MODEL` (`gpt-6-luna`) failover |
 | `TYPESAFE_API_KEY` | TypeSafe AI API key (optional; enables parallel System One `Noul` hint quality scoring) |
 | `ARYHANT_SLACK_BOT_TOKEN` | Bot user OAuth token (`xoxb-...`); required for posting messages and downloading attachments |

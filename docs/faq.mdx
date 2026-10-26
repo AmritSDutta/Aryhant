@@ -77,11 +77,17 @@ DuckDuckGo search is implemented in a dedicated modular engine in `src/chat_agen
 
 ## Question Generation & TypeSafe Curation
 
-### Are we using Jev in this project?
-Yes. **Jev** (`jev-latest`) is TypeSafe AI's System One decision model, integrated via `typesafe-sdk`:
-1. In `src/chat_agent/utils/fast_decision/typesafe_integrator.py`, `get_feedback()` uses `client.system_one(state=..., questions=...)` with `Noul` evaluations to score pedagogical hint clarity on a calibrated 0.0 to 1.0 probability scale.
-2. In `src/chat_agent/agents/question_generator.py`, the pipeline generates 15–20 candidate questions for St. Xavier's Grade 5 ICSE syllabus and uses Jev to rank and select the top 10 items.
-3. If `TYPESAFE_API_KEY` is not set (`settings.typesafe_ready == False`), Jev is gracefully bypassed and the candidate questions are returned directly.
+### How does TypeSafe AI curation work?
+TypeSafe AI's **System One** model is integrated via `typesafe-sdk` and drives hint-quality curation:
+1. In `src/chat_agent/utils/fast_decision/typesafe_integrator.py`, `get_feedback()` calls `client.system_one(state=..., questions=...)` with `Noul` evaluations to score pedagogical hint clarity on a calibrated 0.0 to 1.0 probability scale.
+2. The modular generator package `src/chat_agent/question_generator/` (`gemini` or `nebius`, selected via `QUESTION_GENERATOR_PROVIDER`) generates 15–20 candidate questions for the St. Xavier's Grade 5 ICSE syllabus; `generate_curated_questions` then ranks and returns the top 10 items.
+3. If `TYPESAFE_API_KEY` is not set (`settings.typesafe_ready == False`), System One scoring is gracefully bypassed and the first 10 candidate questions are returned directly.
+
+### Which provider generates practice questions?
+Provider selection is controlled by `QUESTION_GENERATOR_PROVIDER` (default `"nebius"`). `get_question_generator()` returns either `GeminiQuestionGenerator` or `NebiusQuestionGenerator`; both share the same failover chain down to `FALLBACK_GPT_MODEL`. The agent invokes the whole pipeline through the `generate_practice_questions(topic)` tool.
+
+### How does the agent do exact math?
+The `calculate_math(expression)` tool in `src/chat_agent/tools/math_tool.py` parses the expression with Python's `ast` module and evaluates it without `eval`, using operator/function allowlists and exponent bounds. See [Safe math tool](/math-tool).
 
 ---
 

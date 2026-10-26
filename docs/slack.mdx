@@ -43,22 +43,20 @@ To resolve this, a lightweight Cloudflare Worker (`proxies/cloudflare-slack-ack.
 sequenceDiagram
   autonumber
   actor User as Slack User
-  participant Slack as Slack API Events
-  participant CF as Cloudflare Worker Proxy
-  participant QStash as Upstash QStash
-  participant Run as Cloud Run - webhooks slack
-  participant Engine as Direct GenAI / GPT Engine
-  participant SlackAPI as Slack Web API
-  User->>Slack: Tag bot or send DM
-  Slack->>CF: POST event - expects 200 within 3s
-  CF-->>Slack: HTTP 200 OK - Instant ACK
-  CF->>QStash: Enqueue event - POST publish
-  QStash->>Run: POST /webhooks/slack - retries on cold start
-  Run->>Run: authorize_webhook secret check
-  Run-->>QStash: HTTP 200 {"ok": true}
-  Run->>Engine: BackgroundTasks -> handle_slack_payload
-  Engine->>SlackAPI: chat.postMessage in thread
-  SlackAPI-->>User: Bot replies in Slack thread
+  participant Slack as Slack API
+  participant CF as CF Worker
+  participant QStash as QStash
+  participant Run as Cloud Run
+  participant Engine as GenAI / GPT
+  User->>Slack: Tag bot or DM
+  Slack->>CF: POST event
+  CF-->>Slack: 200 ACK (< 3s)
+  CF->>QStash: Enqueue
+  QStash->>Run: Deliver webhook
+  Run->>Run: authorize_webhook
+  Run->>Engine: handle_slack_payload
+  Engine->>Slack: Post reply in thread
+  Slack-->>User: Bot reply
 ```
 
 ### Setup Instructions

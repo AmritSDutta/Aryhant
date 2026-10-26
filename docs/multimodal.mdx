@@ -46,19 +46,19 @@ sequenceDiagram
   autonumber
   actor User as Slack User
   participant Slack as Slack CDN
-  participant Endpoint as POST /webhooks/slack
-  participant Handler as Background Task - handle_slack_payload
-  participant Pipeline as Moderation and Content Pipeline
-  participant Engine as Direct Runner Engine
-  User->>Endpoint: Message with attachment
-  Endpoint-->>User: HTTP 200 OK (< 50ms)
-  Endpoint->>Handler: Enqueue payload processing
-  Handler->>Slack: GET url_private_download (Bearer token)
-  Slack-->>Handler: File bytes and MIME type
-  Handler->>Pipeline: Validate payload and size budget
-  Pipeline-->>Handler: Validation passed
-  Handler->>Engine: run_agent(attachments=[(bytes, mime)])
-  Engine->>Engine: Prune prior binary parts from history
+  participant Endpoint as /webhooks/slack
+  participant Handler as Background Handler
+  participant Pipeline as Validation Pipeline
+  participant Engine as Direct Runner
+  User->>Endpoint: Message + attachment
+  Endpoint-->>User: 200 OK
+  Endpoint->>Handler: Enqueue payload
+  Handler->>Slack: GET file (Bearer token)
+  Slack-->>Handler: File bytes + MIME
+  Handler->>Pipeline: Validate + size budget
+  Pipeline-->>Handler: Passed
+  Handler->>Engine: run_agent(attachments)
+  Engine->>Engine: Prune prior binary parts
   Engine-->>Handler: Text response
   Handler->>Slack: chat.postMessage in thread
 ```
@@ -94,7 +94,7 @@ Content safety is enforced through configurable layers:
 ### 4. Content Assembly (`build_adk_multimodal_content`)
 
 Constructs a `google.genai.types.Content` object:
-- Text prompt (truncated to `MAX_INPUT_CHARS = 4000`) is added via `types.Part.from_text(text=prompt)`.
+- Text prompt (truncated to `MAX_INPUT_CHARS = 5000`) is added via `types.Part.from_text(text=prompt)`.
 - Attachment binaries are appended via `types.Part.from_bytes(data=data, mime_type=mimetype)`.
 
 ### 5. Prior-Turn Binary Pruning
@@ -114,4 +114,4 @@ To prevent image/audio tokens from bloating context windows across multi-turn co
 | `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | Maximum number of attachments parsed per message |
 | `MAX_SINGLE_ATTACHMENT_SIZE_KB` | `500` | Maximum allowed file size per attachment in KB |
 | `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB` | `2` | Maximum cumulative attachment size per message in MB |
-| `MAX_INPUT_CHARS` | `4000` | Character limit for input text prompts |
+| `MAX_INPUT_CHARS` | `5000` | Character limit for input text prompts |

@@ -72,7 +72,7 @@ async def test_run_agent_malicious_prompt_interception():
 
 @pytest.mark.asyncio
 async def test_run_agent_direct_genai_reply():
-    with patch(
+    with patch("chat_agent.agents.model_runner.settings.MODEL_PROVIDER", "gemini"), patch(
         "chat_agent.agents.gemini_model_runner._call_gemini",
         new_callable=AsyncMock,
         return_value="Hello from AI model",
@@ -295,3 +295,33 @@ async def test_nebius_model_runner_tool_execution():
         )
         assert reply == "Current time is 10:00 PM IST"
         assert mock_client.chat.completions.create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_gemini_token_usage_logging(caplog):
+    import logging
+    from google.genai import types
+    from chat_agent.agents.gemini_model_runner import _call_gemini
+
+    mock_resp = MagicMock()
+    mock_resp.candidates = [MagicMock()]
+    mock_resp.candidates[0].content.parts = []
+    mock_resp.text = "Answer"
+    mock_usage = MagicMock()
+    mock_usage.prompt_token_count = 120
+    mock_usage.candidates_token_count = 45
+    mock_usage.total_token_count = 165
+    mock_resp.usage_metadata = mock_usage
+
+    mock_client = MagicMock()
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+    with patch("chat_agent.agents.gemini_model_runner._get_genai_client", return_value=mock_client):
+        with caplog.at_level(logging.INFO):
+            content = types.Content(parts=[types.Part.from_text(text="Hi")])
+            ans = await _call_gemini("gemini-flash-lite-latest", [content])
+            assert ans == "Answer"
+            assert "[Token Usage]" in caplog.text
+            assert "Prompt: 120" in caplog.text
+            assert "Candidates: 45" in caplog.text
+            assert "Total: 165 tokens" in caplog.text

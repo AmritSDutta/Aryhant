@@ -32,7 +32,7 @@ def setup_grafana(app: Any) -> None:
 
         b64 = base64.b64encode(f"{user_id}:{token}".encode()).decode()
         headers = {"Authorization": f"Basic {b64}"}
-        resource = Resource.create({"service.name": "slack-email-bot"})
+        resource = Resource.create({"service.name": "Aryhant-bot"})
 
         # Traces
         provider = TracerProvider(resource=resource)

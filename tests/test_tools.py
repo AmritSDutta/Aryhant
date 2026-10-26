@@ -313,3 +313,33 @@ def test_search_web_tool_returns_json_serializable_dict():
         serialized = json.dumps(res)
         assert "Summary answer" in serialized
 
+
+
+def test_search_tool_candidate_and_failover_logging(caplog):
+    import logging
+    from chat_agent.tools.tool_factory import WebSearchToolPool, BaseWebSearchTool, NormalizedSearchResponse
+
+    class MockFailTool(BaseWebSearchTool):
+        def __init__(self):
+            super().__init__(name="fail_tool")
+        def is_configured(self) -> bool: return True
+        def search(self, query: str, max_results: int = 5, **kwargs):
+            raise RuntimeError("API timeout")
+
+    class MockSuccessTool(BaseWebSearchTool):
+        def __init__(self):
+            super().__init__(name="success_tool")
+        def is_configured(self) -> bool: return True
+        def search(self, query: str, max_results: int = 5, **kwargs):
+            return NormalizedSearchResponse(query=query, provider=self.name, answer=None, results=[])
+
+    pool = WebSearchToolPool()
+    pool.tools = {"fail_tool": MockFailTool(), "success_tool": MockSuccessTool()}
+
+    with caplog.at_level(logging.INFO):
+        with patch.object(pool, "_get_weighted_shuffled_candidates", return_value=[pool.tools["fail_tool"], pool.tools["success_tool"]]):
+            res = pool.search("test query", provider="random")
+            assert res.provider == "success_tool"
+            assert "[Search Tool] Candidate selected: 'fail_tool'" in caplog.text
+            assert "[Search Tool] Failover: 'fail_tool' failed (API timeout). Trying next candidate..." in caplog.text
+            assert "[Search Tool] Candidate selected: 'success_tool'" in caplog.text

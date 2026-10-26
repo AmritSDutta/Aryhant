@@ -518,23 +518,17 @@ class WebSearchToolPool:
 
         errors = []
         for tool in candidate_tools:
+            logger.info("[Search Tool] Candidate selected: '%s'", tool.name)
             try:
-                logger.info(
-                    f"[WebSearchToolPool] Executing search via provider '{tool.name}' for query: '{query[:50]}'")
                 res = tool.search(query=query, max_results=max_results, **kwargs)
                 if res.answer == "tavily failed try with some other websearch" and not res.results:
-                    logger.warning(f"[WebSearchToolPool] Provider '{tool.name}' failed. Trying fallback...")
+                    logger.info("[Search Tool] Failover: '%s' failed (%s). Trying next candidate...", tool.name, res.answer)
                     errors.append(f"{tool.name}: {res.answer}")
                     continue
                 self.call_counts[tool.name] = self.call_counts.get(tool.name, 0) + 1
-                logger.info(
-                    f"✅ [WebSearchToolPool] Provider '{tool.name}' search succeeded! "
-                    f"(Call #{self.call_counts[tool.name]} for {tool.name} | "
-                    f"Total Pool Usage: {dict(self.call_counts)})"
-                )
                 return res
             except Exception as e:
-                logger.warning(f"[WebSearchToolPool] Provider '{tool.name}' failed: {e}. Trying fallback...")
+                logger.info("[Search Tool] Failover: '%s' failed (%s). Trying next candidate...", tool.name, e)
                 errors.append(f"{tool.name}: {e}")
 
         logger.error(f"[WebSearchToolPool] All candidate providers failed for query '{query}': {errors}")

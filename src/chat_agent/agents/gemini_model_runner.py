@@ -127,6 +127,15 @@ async def _call_gemini(model: str, contents: list[types.Content]) -> str:
     convo = list(contents)
     for _ in range(_MAX_TOOL_ROUNDS):
         resp = await client.aio.models.generate_content(model=model, contents=convo, config=config)
+        usage = getattr(resp, "usage_metadata", None)
+        if usage:
+            logger.info(
+                "[Token Usage] Model: '%s' | Prompt: %d | Candidates: %d | Total: %d tokens",
+                model,
+                getattr(usage, "prompt_token_count", 0) or 0,
+                getattr(usage, "candidates_token_count", 0) or 0,
+                getattr(usage, "total_token_count", 0) or 0,
+            )
         candidate = (resp.candidates or [None])[0]
         parts = list(getattr(getattr(candidate, "content", None), "parts", None) or [])
         calls = [p.function_call for p in parts if getattr(p, "function_call", None)]
@@ -231,6 +240,15 @@ async def _run_with_retry_and_fallback(
                         ],
                     )
                 reply = (resp.choices[0].message.content or "").strip()
+                usage = getattr(resp, "usage", None)
+                if usage:
+                    logger.info(
+                        "[Token Usage] Model: '%s' (Fallback) | Prompt: %d | Completion: %d | Total: %d tokens",
+                        fallback_gpt,
+                        getattr(usage, "prompt_tokens", 0) or 0,
+                        getattr(usage, "completion_tokens", 0) or 0,
+                        getattr(usage, "total_tokens", 0) or 0,
+                    )
             except (ImportError, ModuleNotFoundError) as e_pkg:
                 logger.info(
                     "[Model Execution] OpenAI package not found (%s). Executing direct REST completion fallback.",
@@ -267,6 +285,15 @@ async def _run_with_retry_and_fallback(
                         resp = await http_client.post(url, json=payload, headers=headers)
                     resp.raise_for_status()
                     data = resp.json()
+                    usage = data.get("usage") or {}
+                    if usage:
+                        logger.info(
+                            "[Token Usage] Model: '%s' (Fallback REST) | Prompt: %d | Completion: %d | Total: %d tokens",
+                            fallback_gpt,
+                            usage.get("prompt_tokens", 0) or 0,
+                            usage.get("completion_tokens", 0) or 0,
+                            usage.get("total_tokens", 0) or 0,
+                        )
                     reply = (data["choices"][0]["message"]["content"] or "").strip()
 
             if reply:

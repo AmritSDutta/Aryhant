@@ -47,6 +47,15 @@ async def generate_candidate_questions(
             contents=prompt,
             config=config,
         )
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            logger.info(
+                "[Token Usage] Model: '%s' (Questions) | Prompt: %d | Candidates: %d | Total: %d tokens",
+                settings.model,
+                getattr(usage, "prompt_token_count", 0) or 0,
+                getattr(usage, "candidates_token_count", 0) or 0,
+                getattr(usage, "total_token_count", 0) or 0,
+            )
         raw_text: str = (response.text or "").strip()
         if raw_text:
             return _schema_adapter.validate_json(raw_text)

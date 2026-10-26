@@ -213,6 +213,15 @@ async def _call_nebius_completion(
                     temperature=0.2,
                 )
 
+            usage = getattr(resp, "usage", None)
+            if usage:
+                logger.info(
+                    "[Token Usage] Model: '%s' | Prompt: %d | Completion: %d | Total: %d tokens",
+                    model,
+                    getattr(usage, "prompt_tokens", 0) or 0,
+                    getattr(usage, "completion_tokens", 0) or 0,
+                    getattr(usage, "total_tokens", 0) or 0,
+                )
             choice = resp.choices[0]
             msg = choice.message
             tool_calls = getattr(msg, "tool_calls", None)
@@ -272,6 +281,15 @@ async def _call_nebius_completion(
                     resp = await http_client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
+                usage = data.get("usage") or {}
+                if usage:
+                    logger.info(
+                        "[Token Usage] Model: '%s' (HTTPX) | Prompt: %d | Completion: %d | Total: %d tokens",
+                        model,
+                        usage.get("prompt_tokens", 0) or 0,
+                        usage.get("completion_tokens", 0) or 0,
+                        usage.get("total_tokens", 0) or 0,
+                    )
                 msg = data["choices"][0]["message"]
                 tool_calls = msg.get("tool_calls")
                 if not tool_calls:

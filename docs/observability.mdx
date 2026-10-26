@@ -30,6 +30,22 @@ The application integrates production-grade telemetry, rate limiting, authentica
 2026-09-29 02:48:17 | INFO     | tool_factory | tool_factory._generate_study_notes_pdf_sync:626 | [Notes Engine] Phase 2: Slack upload finished with status=success for: /tmp/notes_123.pdf
 ```
 
+### Search Tool Provider & Failover Logging (`tool_factory.py`)
+- `[Search Tool]`: Emitted at `INFO` level strictly for candidate provider selection and failover fallback transitions.
+
+```text
+2026-10-26 20:45:00 | INFO     | tool_factory | [Search Tool] Candidate selected: 'duckduckgo'
+2026-10-26 20:45:01 | INFO     | tool_factory | [Search Tool] Failover: 'tavily' failed (tavily failed try with some other websearch). Trying next candidate...
+```
+
+### Model Token Usage Logging
+- `[Token Usage]`: Emitted at `INFO` level for every generation across Google GenAI (Gemini), Nebius, and OpenAI fallback runners to report prompt, candidate/completion, and total token consumption.
+
+```text
+2026-10-26 20:45:02 | INFO     | gemini_model_runner | [Token Usage] Model: 'gemini-flash-lite-latest' | Prompt: 482 | Candidates: 156 | Total: 638 tokens
+2026-10-26 20:45:03 | INFO     | nebius_model_runner | [Token Usage] Model: 'nvidia/Nemotron-3.5-Super-VL' | Prompt: 512 | Completion: 184 | Total: 696 tokens
+```
+
 ## 2. In-Memory Rate Limiting
 
 `src/chat_agent/config/rate_limiter.py` provides a FastAPI dependency backed by `pyrate-limiter`:

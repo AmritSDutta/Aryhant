@@ -42,49 +42,169 @@ def test_normalized_search_response_formatting():
 def test_is_configured_logic():
     tool_configured = TavilySearchTool(api_key="tvly-actual-key")
     assert tool_configured.is_configured() is True
+    assert tool_configured.is_keyed() is True
 
     tool_unconfigured = TavilySearchTool(api_key="TAVILY_API_KEY")
-    assert tool_unconfigured.is_configured() is False
+    assert tool_unconfigured.is_configured() is True
+    assert tool_unconfigured.is_keyed() is False
 
     tool_empty = TavilySearchTool(api_key="")
-    assert tool_empty.is_configured() is False
+    assert tool_empty.is_configured() is True
+    assert tool_empty.is_keyed() is False
+
+    tool_exa = ExaSearchTool(api_key="EXA_API_KEY")
+    assert tool_exa.is_configured() is False
 
 
-def test_tavily_search_mocked():
-    mock_tavily_inst = MagicMock()
-    mock_tavily_inst.search.return_value = {
-        "results": [{"title": "Test Title", "url": "https://test.com", "content": "Test Body"}]
-    }
-    mock_tavily_mod = MagicMock(TavilyClient=MagicMock(return_value=mock_tavily_inst))
-
-    with patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
-        tool = TavilySearchTool(api_key="valid-key")
-        res = tool.search(query="python fastapi")
-        assert len(res.results) == 1
-        assert res.results[0].title == "Test Title"
-        assert res.results[0].content == "Test Body"
-
-
-def test_tavily_search_rest_fallback_when_module_missing():
-    import sys
+def test_tavily_search_keyless_success():
     import requests
 
     mock_resp = MagicMock()
     mock_resp.json.return_value = {
-        "answer": "REST answer",
-        "results": [{"title": "REST Title", "url": "https://rest.com", "content": "REST Body", "score": 0.95}],
+        "answer": "Keyless answer",
+        "results": [{"title": "Keyless Title", "url": "https://keyless.com", "content": "Keyless Body"}],
     }
     mock_resp.raise_for_status = MagicMock()
 
-    with patch.dict(sys.modules, {"tavily": None}), \
-         patch("requests.post", return_value=mock_resp) as mock_post:
-        tool = TavilySearchTool(api_key="valid-key")
+    with patch("requests.post", return_value=mock_resp) as mock_post:
+        tool = TavilySearchTool(api_key="")
         res = tool.search(query="python fastapi")
-        assert res.answer == "REST answer"
+        assert res.provider == "tavily"
+        assert res.answer == "Keyless answer"
         assert len(res.results) == 1
-        assert res.results[0].title == "REST Title"
-        assert res.results[0].url == "https://rest.com"
+        assert res.results[0].title == "Keyless Title"
+
         mock_post.assert_called_once()
+        call_args, call_kwargs = mock_post.call_args
+        assert call_args[0] == "https://api.tavily.com/search"
+        assert call_kwargs["headers"].get("X-Tavily-Access-Mode") == "keyless"
+        assert "Authorization" not in call_kwargs["headers"]
+        assert "api_key" not in call_kwargs["json"]
+
+
+def test_tavily_search_keyless_failure_fallback_to_sdk():
+    import requests
+
+    mock_tavily_inst = MagicMock()
+    mock_tavily_inst.search.return_value = {
+        "results": [{"title": "SDK Title", "url": "https://sdk.com", "content": "SDK Body"}]
+    }
+    mock_tavily_mod = MagicMock(TavilyClient=MagicMock(return_value=mock_tavily_inst))
+
+    with patch("requests.post", side_effect=requests.RequestException("Rate limited")), \
+         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+        tool = TavilySearchTool(api_key="tvly-keyed-token")
+        res = tool.search(query="python fastapi")
+        assert len(res.results) == 1
+        assert res.results[0].title == "SDK Title"
+        mock_tavily_inst.search.assert_called_once_with(query="python fastapi", max_results=10)
+
+
+def test_tavily_search_failure_returns_tavily_failed_message():
+    import requests
+
+    # 1. Unkeyed tool failure
+    with patch("requests.post", side_effect=requests.RequestException("429 Too Many Requests")):
+        tool = TavilySearchTool(api_key="")
+        res = tool.search(query="python fastapi")
+        assert res.answer == "tavily failed try with some other websearch"
+        assert len(res.results) == 0
+        assert res.provider == "tavily"
+
+    # 2. Keyed tool where SDK also fails (no 3rd retry, return failed message directly)
+    mock_tavily_mod = MagicMock()
+    mock_tavily_mod.TavilyClient.side_effect = Exception("SDK connection error")
+    with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
+         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+        tool_keyed = TavilySearchTool(api_key="tvly-secret")
+        res_keyed = tool_keyed.search(query="python fastapi")
+        assert res_keyed.answer == "tavily failed try with some other websearch"
+        assert len(res_keyed.results) == 0
+
+
+def test_web_search_tool_pool_tavily_failure_falls_back():
+    import requests
+
+    pool = WebSearchToolPool()
+    tavily_tool = pool.tools[SearchProvider.TAVILY.value]
+    ddg_tool = pool.tools[SearchProvider.DUCKDUCKGO.value]
+
+    mock_ddg_res = NormalizedSearchResponse(
+        query="test",
+        provider="duckduckgo",
+        results=[SearchResultItem(title="DDG Result", url="https://ddg.com", content="DDG Body")]
+    )
+
+    with patch.object(tavily_tool, "search", return_value=NormalizedSearchResponse(
+        query="test", provider="tavily", answer="tavily failed try with some other websearch", results=[]
+    )), patch.object(ddg_tool, "search", return_value=mock_ddg_res), \
+         patch.object(pool, "get_configured_providers", return_value=[tavily_tool, ddg_tool]):
+        res = pool.search(query="test", provider="tavily")
+        assert res.provider == "duckduckgo"
+        assert len(res.results) == 1
+        assert res.results[0].title == "DDG Result"
+
+
+def test_tavily_extract_keyless_and_fallback():
+    import requests
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "results": [{"url": "https://example.com", "raw_content": "Extracted text"}]
+    }
+    mock_resp.raise_for_status = MagicMock()
+
+    # 1. Keyless extract success
+    with patch("requests.post", return_value=mock_resp) as mock_post:
+        tool = TavilySearchTool(api_key="")
+        results = tool.extract(["https://example.com"])
+        assert len(results) == 1
+        assert results[0]["raw_content"] == "Extracted text"
+        assert mock_post.call_args[1]["headers"].get("X-Tavily-Access-Mode") == "keyless"
+
+    # 2. Keyless extract failure falling back to SDK extract
+    mock_client = MagicMock()
+    mock_client.extract.return_value = {"results": [{"url": "https://example.com", "raw_content": "SDK extract"}]}
+    mock_tavily_mod = MagicMock(TavilyClient=MagicMock(return_value=mock_client))
+    with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
+         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+        tool = TavilySearchTool(api_key="tvly-secret")
+        results = tool.extract(["https://example.com"])
+        assert len(results) == 1
+        assert results[0]["raw_content"] == "SDK extract"
+
+    # 3. Both keyless and SDK fail -> returns failure error item
+    mock_client_fail = MagicMock()
+    mock_client_fail.extract.side_effect = Exception("SDK error")
+    with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
+         patch.dict("sys.modules", {"tavily": MagicMock(TavilyClient=MagicMock(return_value=mock_client_fail))}):
+        tool = TavilySearchTool(api_key="tvly-secret")
+        results = tool.extract(["https://example.com"])
+        assert len(results) == 1
+        assert results[0]["error"] == "tavily failed try with some other websearch"
+
+
+@pytest.mark.asyncio
+async def test_tavily_extract_async():
+    tool = TavilySearchTool(api_key="")
+    with patch.object(tool, "extract", return_value=[{"url": "https://async.com"}]) as mock_extract:
+        res = await tool.extract_async(["https://async.com"])
+        assert len(res) == 1
+        mock_extract.assert_called_once_with(["https://async.com"])
+
+
+def test_extract_web_content_tool_helper():
+    from chat_agent.tools.tool_factory import extract_web_content
+
+    with patch.object(TavilySearchTool, "extract", return_value=[{"url": "https://test.com", "content": "OK"}]):
+        res = extract_web_content(["https://test.com"])
+        assert res["status"] == "success"
+        assert len(res["results"]) == 1
+
+    with patch.object(TavilySearchTool, "extract", side_effect=Exception("Failed to fetch")):
+        res = extract_web_content(["https://test.com"])
+        assert res["status"] == "error"
+        assert "Failed to fetch" in res["error"]
 
 
 @pytest.mark.asyncio

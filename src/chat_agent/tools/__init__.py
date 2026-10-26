@@ -9,6 +9,7 @@ from chat_agent.tools.tool_factory import (
     SerperSearchTool,
     TavilySearchTool,
     WebSearchToolPool,
+    extract_web_content,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "SerperSearchTool",
     "DuckDuckGoSearchTool",
     "WebSearchToolPool",
+    "extract_web_content",
 ]

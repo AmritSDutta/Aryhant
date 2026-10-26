@@ -5,12 +5,12 @@ description: Multi-provider search tool pool supporting DuckDuckGo, Exa, Firecra
 
 # Web search
 
-The agent is equipped with the `search_web` tool directly configured in the execution engine in `src/chat_agent/agents/runner.py` alongside `get_current_time`, `generate_study_notes_pdf`, and `generate_infographic_pdf`. The underlying implementation in `src/chat_agent/tools/tool_factory.py` manages a multi-provider search pool with weighted selection, automatic provider failover, response sanitization, and automatic summarization.
+The agent is equipped with the `search_web` tool directly configured in the execution engine in `src/chat_agent/agents/gemini_model_runner.py` and `src/chat_agent/agents/nebius_model_runner.py` alongside `get_current_time`, `generate_study_notes_pdf`, and `generate_infographic_pdf`. The underlying implementation in `src/chat_agent/tools/tool_factory.py` manages a multi-provider search pool with weighted selection, automatic provider failover, response sanitization, and automatic summarization.
 
 ## Tool Integration
 
 ```python
-# src/chat_agent/agents/runner.py
+# src/chat_agent/agents/gemini_model_runner.py
 _TOOLS = [
     get_current_time,
     search_web,
@@ -26,24 +26,30 @@ The system prompt instructs the agent to use `search_web` when researching up-to
 
 | Provider | Environment Variable | Default Weight | Features & Fallback Mechanism |
 | :--- | :--- | :--- | :--- |
-| **DuckDuckGo** | *None required* | `55.0` | Uses `ddgs` or `duckduckgo-search` package; falls back to BeautifulSoup / regex HTML scraping |
+| **DuckDuckGo** | *None required* | `25.0` | Zero-config search; uses `ddgs` or `duckduckgo-search` package; falls back to BeautifulSoup / regex HTML scraping |
+| **Tavily** | *None required* (`TAVILY_API_KEY` optional) | `25.0` | Keyless-first agentic search & extract; sends `X-Tavily-Access-Mode: keyless`; automatically falls back to API key on failure |
 | **Exa** | `EXA_API_KEY` | `20.0` | Semantic web search via `https://api.exa.ai/search` |
-| **Firecrawl** | `FIRECRAWL_API_KEY` | `10.0` | Structured markdown web search via `https://api.firecrawl.dev/v1/search` |
-| **Tavily** | `TAVILY_API_KEY` | `10.0` | Agentic search with direct answers via Tavily SDK & REST fallback |
+| **Firecrawl** | `FIRECRAWL_API_KEY` | `25.0` | Structured markdown web search via `https://api.firecrawl.dev/v1/search` |
 | **Serper** | `SERPER_API_KEY` | `5.0` | Google Search API proxy via `https://google.serper.dev/search` |
+
+## Keyless-First Tavily Search & Extract
+
+Tavily provides free keyless access out of the box with zero configuration:
+- **Search**: `TavilySearchTool.search()` first attempts keyless query execution using the `X-Tavily-Access-Mode: keyless` header to `https://api.tavily.com/search`. If keyless access is rate-limited and a valid `TAVILY_API_KEY` is configured, it seamlessly falls back to keyed requests.
+- **Extract**: `TavilySearchTool.extract()` and `extract_web_content()` pull structured markdown and text from specific web URLs via `https://api.tavily.com/extract`, using the same keyless-first, API-key fallback strategy.
 
 ## Weighted Selection and Automatic Failover
 
 When `DEFAULT_SEARCH_PROVIDER` is set to `random` (default) or `auto`:
-1. The pool identifies all configured providers (those with non-empty API keys, plus DuckDuckGo).
+1. The pool identifies all configured providers (Tavily and DuckDuckGo are always available without keys, plus any other providers with non-empty API keys).
 2. It executes a **weighted sampling without replacement** based on configured provider weights.
 3. If the first selected provider fails (e.g., rate limit, network timeout), the pool immediately falls back to the next candidate provider until a valid search response is returned.
 
 ```mermaid
 flowchart TD
   Query["User or Agent Search Query"] --> Pool["WebSearchToolPool.search"]
-  Pool --> ConfigCheck["Check Configured Provider API Keys"]
-  ConfigCheck --> WeightedSample["Weighted Shuffled Order - DDG 55, Exa 20, Firecrawl 10, Tavily 10, Serper 5"]
+  Pool --> ConfigCheck["Check Available Providers - Tavily and DDG always ready"]
+  ConfigCheck --> WeightedSample["Weighted Shuffled Order - Tavily 25, DDG 25, Firecrawl 25, Exa 20, Serper 5"]
   WeightedSample --> PrimaryAttempt["Attempt 1: Top Candidate"]
   PrimaryAttempt -->|Success| Clean["clean_tool_response - Strip Emojis and Whitespace"]
   PrimaryAttempt -->|Failure or Timeout| FallbackAttempt["Attempt 2: Next Provider in Weighted Order"]
@@ -64,14 +70,18 @@ flowchart TD
 ```python
 from chat_agent.tools.tool_factory import (
     search_web,
+    extract_web_content,
     get_search_pool,
     get_search_tool_usage_counts,
 )
 
-# 1. Execute search across weighted pool
+# 1. Execute search across weighted pool (keyless Tavily and DDG work out-of-the-box)
 response = search_web(query="ICSE Class 5 Science living and non-living things", max_results=5)
 
-# 2. Inspect provider usage counts
+# 2. Extract structured content from specific URLs
+extracted = extract_web_content(urls=["https://en.wikipedia.org/wiki/FastAPI"])
+
+# 3. Inspect provider usage counts
 counts = get_search_tool_usage_counts()
-# Example output: {"duckduckgo": 14, "tavily": 2, "exa": 4, "firecrawl": 1, "serper": 0}
+# Example output: {"duckduckgo": 14, "tavily": 16, "exa": 4, "firecrawl": 1, "serper": 0}
 ```

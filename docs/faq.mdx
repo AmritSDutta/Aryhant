@@ -54,17 +54,20 @@ The earlier architecture used Google ADK's `Agent`, `Runner`, `InMemorySessionSe
 1. **Agent Transfer Context Warnings**: Multi-agent transfers triggered recurring warnings (`App "aryhant" can transfer between agents but has no context_cache_config`) because prompt prefixes and tool sets swapped on every transition without shared cache configs.
 2. **Tool Serialization Errors**: ADK's `OpenAILlm` attempted naive `json.dumps()` serialization on tool outputs, crashing on Pydantic `BaseModel` objects (`TypeError: Object of type NormalizedSearchResponse is not JSON serializable`).
 3. **Hidden Control Flow**: Multi-layered runner state machines obscured simple API calls and made retry backoff and failovers harder to debug.
-4. **Direct Simplicity**: The simplified engine in `src/chat_agent/agents/runner.py` uses direct `google.genai.Client` and `AsyncOpenAI` / `httpx` with an explicit function-calling loop. It provides zero-latency immediate replies, transparent 3x randomized retries across `FIRST_CHOICE_MODELS`, and seamless failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`).
+4. **Direct Simplicity**: The simplified engine in `src/chat_agent/agents/gemini_model_runner.py` and `src/chat_agent/agents/nebius_model_runner.py` uses direct model APIs with explicit function-calling loops. It provides zero-latency immediate replies, transparent 3x randomized retries across `FIRST_CHOICE_MODELS`, and seamless failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`).
 
 ---
 
 ## Search Dependencies & Fallbacks
 
-### What happens if `tavily-python` is missing?
-The search pool in `src/chat_agent/tools/tool_factory.py` implements dual-mode resilience:
-- **Primary SDK Mode**: If `tavily-python` (pinned at `>=0.7.26` in `requirements.txt`) is installed and `TAVILY_API_KEY` is present, it uses `tavily.TavilyClient`.
-- **Automatic REST Fallback**: If the package is not installed or raises an `ImportError`, the tool seamlessly falls back to direct asynchronous HTTP requests via `httpx` against `https://api.tavily.com/search`.
-- **Pool Failover**: If Tavily fails or lacks an API key, the weighted search pool automatically falls back to DuckDuckGo, Exa, Firecrawl, or Serper without failing the user request.
+### Does Tavily require an API key?
+No. Tavily Search and Extract support keyless access via `X-Tavily-Access-Mode: keyless` with zero configuration. `TavilySearchTool` tries keyless mode first on every request. If keyless access hits rate limits and `TAVILY_API_KEY` is configured, it automatically falls back to authenticated keyed mode via the SDK or keyed REST.
+
+### What happens if `tavily-python` is missing or keyless limits are hit?
+The search pool in `src/chat_agent/tools/tool_factory.py` implements multi-layer resilience:
+- **Keyless-First REST**: Executes keyless HTTP requests with `X-Tavily-Access-Mode: keyless` against `https://api.tavily.com/search` and `https://api.tavily.com/extract`.
+- **Keyed SDK / REST Fallback**: If keyless fails and `TAVILY_API_KEY` is provided, the tool retries via `tavily.TavilyClient` (if installed) or keyed REST with `Authorization: Bearer <key>`.
+- **Pool Failover**: If Tavily fails or lacks an API key fallback, the weighted search pool automatically falls back to DuckDuckGo, Exa, Firecrawl, or Serper without failing the user request.
 
 ### Why did DuckDuckGo log `DuckDuckGo REST fallback failed: No module named 'bs4'`?
 When DuckDuckGo's library search hit rate limits or failed, the REST HTML scraper attempted to import BeautifulSoup (`bs4`). If `beautifulsoup4` was not installed, it logged an error.

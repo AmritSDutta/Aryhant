@@ -121,33 +121,68 @@ class BaseWebSearchTool(abc.ABC):
 
 
 class TavilySearchTool(BaseWebSearchTool):
-    """Tavily Search Tool Provider."""
+    """Tavily Search Tool Provider with Keyless-First and TavilyClient Fallback."""
 
     def __init__(self, api_key: Optional[str] = None):
         super().__init__(name=SearchProvider.TAVILY.value,
                          api_key=api_key if api_key is not None else settings.TAVILY_API_KEY)
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> NormalizedSearchResponse:
-        raw_res = None
-        try:
-            from tavily import TavilyClient
+    def is_configured(self) -> bool:
+        """Tavily search is always configured via keyless access mode."""
+        return True
 
-            client = TavilyClient(api_key=self.api_key)
-            raw_res = client.search(query=query, max_results=max_results, **kwargs)
-        except (ImportError, ModuleNotFoundError) as e_import:
-            logger.info("Tavily package not found (%s). Executing direct REST search.", e_import)
+    def is_keyed(self) -> bool:
+        """Check if a valid, non-placeholder Tavily API key is configured."""
+        if not self.api_key:
+            return False
+        invalid_defaults = {"TAVILY_API_KEY", ""}
+        return self.api_key not in invalid_defaults
+
+    def search(self, query: str, max_results: int = 10, **kwargs: Any) -> NormalizedSearchResponse:
+        """Execute web search using Tavily. Tries keyless first; falls back to TavilyClient on failure."""
+        raw_res: Any = None
+
+        # 1. Attempt keyless search first
+        try:
             url = "https://api.tavily.com/search"
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "api_key": self.api_key,
+            headers = {
+                "Content-Type": "application/json",
+                "X-Tavily-Access-Mode": "keyless",
+            }
+            payload: Dict[str, Any] = {
                 "query": query,
                 "max_results": max_results,
                 "include_answer": kwargs.get("include_answer", True),
                 "search_depth": kwargs.get("search_depth", "basic"),
             }
+            for k, v in kwargs.items():
+                if k not in payload:
+                    payload[k] = v
+
             resp = requests.post(url, json=payload, headers=headers, timeout=15)
             resp.raise_for_status()
             raw_res = resp.json()
+        except Exception as e_keyless:
+            logger.info("Tavily keyless search failed (%s). Checking TavilyClient fallback.", e_keyless)
+
+        # 2. Keyed fallback via TavilyClient if configured (do not retry keyed REST on failure)
+        if raw_res is None and self.is_keyed():
+            try:
+                from tavily import TavilyClient
+
+                client = TavilyClient(api_key=self.api_key)
+                raw_res = client.search(query=query, max_results=max_results, **kwargs)
+            except Exception as e_sdk:
+                logger.warning("Tavily client search failed: %s", e_sdk)
+
+        if raw_res is None:
+            return NormalizedSearchResponse(
+                query=query,
+                provider=self.name,
+                answer="tavily failed try with some other websearch",
+                results=[],
+                raw_response={"error": "tavily failed try with some other websearch"},
+            )
 
         answer = None
         results = []
@@ -189,6 +224,47 @@ class TavilySearchTool(BaseWebSearchTool):
             results=results,
             raw_response=raw_res if isinstance(raw_res, dict) else None,
         )
+
+    def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
+        """Extract web content from URLs via Tavily /extract. Tries keyless first; falls back to TavilyClient on failure."""
+        url = "https://api.tavily.com/extract"
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "X-Tavily-Access-Mode": "keyless",
+            }
+            payload: Dict[str, Any] = {"urls": urls}
+            for k, v in kwargs.items():
+                if k not in payload:
+                    payload[k] = v
+            resp = requests.post(url, json=payload, headers=headers, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("results", [])
+        except Exception as e_keyless:
+            logger.info("Tavily keyless extract failed (%s). Checking API key fallback.", e_keyless)
+
+        if self.is_keyed():
+            try:
+                from tavily import TavilyClient
+
+                client = TavilyClient(api_key=self.api_key)
+                if hasattr(client, "extract"):
+                    data = client.extract(urls=urls, **kwargs)
+                    if isinstance(data, dict):
+                        return data.get("results", [])
+                    return getattr(data, "results", [])
+            except Exception as e_sdk:
+                logger.warning("Tavily client extract failed: %s", e_sdk)
+
+        return [{"error": "tavily failed try with some other websearch"}]
+
+    async def extract_async(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
+        """Execute asynchronous URL extraction in a non-blocking worker thread."""
+        import asyncio
+
+        return await asyncio.to_thread(self.extract, urls, **kwargs)
 
 
 class ExaSearchTool(BaseWebSearchTool):
@@ -506,6 +582,10 @@ class WebSearchToolPool:
                 logger.info(
                     f"[WebSearchToolPool] Executing search via provider '{tool.name}' for query: '{query[:50]}'")
                 res = tool.search(query=query, max_results=max_results, **kwargs)
+                if res.answer == "tavily failed try with some other websearch" and not res.results:
+                    logger.warning(f"[WebSearchToolPool] Provider '{tool.name}' failed. Trying fallback...")
+                    errors.append(f"{tool.name}: {res.answer}")
+                    continue
                 self.call_counts[tool.name] = self.call_counts.get(tool.name, 0) + 1
                 logger.info(
                     f"✅ [WebSearchToolPool] Provider '{tool.name}' search succeeded! "
@@ -517,10 +597,11 @@ class WebSearchToolPool:
                 errors.append(f"{tool.name}: {e}")
 
         logger.error(f"[WebSearchToolPool] All candidate providers failed for query '{query}': {errors}")
+        failed_answer = "tavily failed try with some other websearch" if any("tavily failed" in err for err in errors) else None
         return NormalizedSearchResponse(
             query=query,
             provider="error",
-            answer=None,
+            answer=failed_answer,
             results=[],
             raw_response={"errors": errors},
         )
@@ -555,6 +636,17 @@ def search_web(
         "results": [r.model_dump() for r in norm_res.results],
         "content": formatted,
     }
+
+
+def extract_web_content(urls: List[str]) -> Dict[str, Any]:
+    """Extract clean web page content from URLs using Tavily extract."""
+    tool = TavilySearchTool()
+    try:
+        results = tool.extract(urls)
+        return {"status": "success", "results": results}
+    except Exception as e:
+        logger.error(f"Failed to extract web content from {urls}: {e}")
+        return {"status": "error", "error": str(e), "results": []}
 
 
 def get_search_tool_usage_counts() -> Dict[str, int]:

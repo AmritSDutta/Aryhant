@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     REPLY_ONLY_TO_MENTIONS: bool = True
 
     # Slack Integration
-    SLACK_BOT_TOKEN: str = ""
-    SLACK_APP_TOKEN: str = ""
+    ARYHANT_SLACK_BOT_TOKEN: str = ""
+    ARYHANT_SLACK_APP_TOKEN: str = ""
     SLACK_SIGNING_SECRET: str = ""
     MAX_SINGLE_ATTACHMENT_SIZE_KB: int = 500
     MAX_CUMULATIVE_ATTACHMENT_SIZE_MB: int = 2
@@ -173,12 +173,12 @@ class Settings(BaseSettings):
         return self.MAX_OUTPUT_TOKENS
 
     @property
-    def slack_bot_token(self) -> str:
-        return self.SLACK_BOT_TOKEN or os.getenv("SLACK_BOT_TOKEN", "")
+    def aryhant_slack_bot_token(self) -> str:
+        return self.ARYHANT_SLACK_BOT_TOKEN or os.getenv("ARYHANT_SLACK_BOT_TOKEN", "")
 
     @property
-    def slack_app_token(self) -> str:
-        return self.SLACK_APP_TOKEN or os.getenv("SLACK_APP_TOKEN", "")
+    def aryhant_slack_app_token(self) -> str:
+        return self.ARYHANT_SLACK_APP_TOKEN or os.getenv("ARYHANT_SLACK_APP_TOKEN", "")
 
     @property
     def slack_signing_secret(self) -> str:
@@ -244,11 +244,11 @@ class Settings(BaseSettings):
 
     @property
     def slack_ready(self) -> bool:
-        return bool(self.SLACK_BOT_TOKEN and self.SLACK_APP_TOKEN)
+        return bool(self.aryhant_slack_bot_token and self.aryhant_slack_app_token)
 
     @property
     def slack_http_ready(self) -> bool:
-        return bool(self.slack_bot_token)
+        return bool(self.aryhant_slack_bot_token)
 
     @property
     def webhook_auth_ready(self) -> bool:

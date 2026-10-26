@@ -56,7 +56,7 @@ async def post_slack_message(
 ) -> dict[str, Any]:
     if not text and not blocks:
         raise ValueError("Either text or blocks must be provided to post_slack_message.")
-    token = settings.slack_bot_token
+    token = settings.aryhant_slack_bot_token
     payload: dict[str, Any] = {"channel": channel}
     if text:
         payload["text"] = text

@@ -134,7 +134,7 @@ async def slack_events(request: Request, background_tasks: BackgroundTasks) -> d
         return {"challenge": payload.get("challenge", "")}
     authorize_webhook(request, body)
     if not slack_http_ready():
-        logger.error("Slack event rejected: SLACK_BOT_TOKEN is not configured.")
+        logger.error("Slack event rejected: ARYHANT_SLACK_BOT_TOKEN is not configured.")
         return JSONResponse({"error": "Service unavailable"}, status_code=503)
     background_tasks.add_task(handle_slack_payload, payload)
     return {"ok": True}

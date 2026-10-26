@@ -8,7 +8,7 @@ import os
 from PIL import Image
 
 # Local source images, in priority order (first existing one wins).
-src_candidates = ["vedantu.jpg", "icon_src.jpg"]
+src_candidates = ["Aryhant.jpg", "icon_src.jpg"]
 src = next((c for c in src_candidates if os.path.exists(c)), None)
 if not src:
     raise FileNotFoundError("No source icon found (expected vedantu.jpg or icon_src.jpg).")

@@ -972,7 +972,7 @@ def upload_file_to_slack(
             "file_path": file_path,
         }
 
-    token = settings.slack_bot_token
+    token = settings.aryhant_slack_bot_token
     if not token or not channel:
         return {
             "status": "skipped",

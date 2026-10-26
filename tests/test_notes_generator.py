@@ -163,13 +163,13 @@ def test_upload_file_to_slack_missing_config_or_file() -> None:
     Path(outside_file).write_bytes(b"%PDF-1.4 test")
 
     try:
-        with patch.dict(os.environ, {"SLACK_BOT_TOKEN": ""}):
-            with patch.object(settings, "SLACK_BOT_TOKEN", ""):
+        with patch.dict(os.environ, {"ARYHANT_SLACK_BOT_TOKEN": ""}):
+            with patch.object(settings, "ARYHANT_SLACK_BOT_TOKEN", ""):
                 res_no_token = upload_file_to_slack(temp_file, "C123456")
                 assert res_no_token["status"] == "skipped"
                 assert "not configured" in res_no_token["reason"]
 
-        with patch.object(settings, "SLACK_BOT_TOKEN", "xoxb-mock-token"):
+        with patch.object(settings, "ARYHANT_SLACK_BOT_TOKEN", "xoxb-mock-token"):
             res_blocked = upload_file_to_slack(outside_file, "C123456")
             assert res_blocked["status"] == "error"
             assert "restricted" in res_blocked["error"].lower()
@@ -240,7 +240,7 @@ def test_upload_file_to_slack_queues_background_thread() -> None:
     Path(temp_file).write_bytes(b"%PDF-1.4 queue test")
 
     try:
-        with patch.object(settings, "SLACK_BOT_TOKEN", "xoxb-mock-token"):
+        with patch.object(settings, "ARYHANT_SLACK_BOT_TOKEN", "xoxb-mock-token"):
             with patch("chat_agent.tools.tool_factory._upload_file_to_slack_sync") as mock_sync:
                 res = upload_file_to_slack(temp_file, "C12345", thread_ts="123.456")
                 assert res["status"] == "queued"

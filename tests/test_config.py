@@ -22,8 +22,8 @@ def test_settings_initialization_and_properties():
         APP_NAME="custom-bot",
         USER_LLM_API_KEY="custom-api-key",
         USER_LLM_MODEL="gemini-3.5-flash-lite",
-        SLACK_BOT_TOKEN="xoxb-custom",
-        SLACK_APP_TOKEN="xapp-custom",
+        ARYHANT_SLACK_BOT_TOKEN="xoxb-custom",
+        ARYHANT_SLACK_APP_TOKEN="xapp-custom",
         SLACK_SIGNING_SECRET="secret",
         WEBHOOK_SHARED_SECRET="shared",
         EMAIL_ENABLED=True,
@@ -40,6 +40,8 @@ def test_settings_initialization_and_properties():
     assert cfg.api_key == "custom-api-key"
     assert cfg.model == "gemini-3.5-flash-lite"
     assert cfg.slack_ready is True
+    assert cfg.aryhant_slack_bot_token == "xoxb-custom"
+    assert cfg.aryhant_slack_app_token == "xapp-custom" 
     assert cfg.slack_http_ready is True
     assert cfg.webhook_auth_ready is True
     assert cfg.email_ready is True
@@ -55,8 +57,8 @@ def test_settings_unconfigured_defaults():
         USER_LLM_API_KEY="",
         GEMINI_API_KEY="",
         GOOGLE_API_KEY="",
-        SLACK_BOT_TOKEN="",
-        SLACK_APP_TOKEN="",
+        ARYHANT_SLACK_BOT_TOKEN="",
+        ARYHANT_SLACK_APP_TOKEN="",
         EMAIL_ENABLED=False,
         QSTASH_CURRENT_SIGNING_KEY="",
     )
@@ -114,3 +116,15 @@ def test_setup_grafana_missing_user_id():
         with patch.dict("os.environ", {}, clear=True):
             setup_grafana(app_mock)
 
+
+
+def test_settings_aryhant_slack_tokens():
+    cfg = Settings(
+        USER_LLM_API_KEY="custom-api-key",
+        ARYHANT_SLACK_BOT_TOKEN="xoxb-aryhant",
+        ARYHANT_SLACK_APP_TOKEN="xapp-aryhant",
+    )
+    assert cfg.aryhant_slack_bot_token == "xoxb-aryhant"
+    assert cfg.aryhant_slack_app_token == "xapp-aryhant"
+    assert cfg.slack_ready is True
+    assert cfg.slack_http_ready is True

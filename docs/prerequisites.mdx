@@ -29,8 +29,8 @@ RuntimeError: Set USER_LLM_API_KEY in .env before starting the agent.
 | `USER_LLM_API_KEY` | Gemini API key (checked with `GEMINI_API_KEY` and `GOOGLE_API_KEY` fallbacks) |
 | `OPENAI_API_KEY` | OpenAI API key for `FALLBACK_GPT_MODEL` (`gpt-6-luna`) failover |
 | `TYPESAFE_API_KEY` | TypeSafe AI API key (optional; enables parallel System One `Noul` hint quality scoring) |
-| `SLACK_BOT_TOKEN` | Bot user OAuth token (`xoxb-...`); required for posting messages and downloading attachments |
-| `SLACK_APP_TOKEN` | App-level token (`xapp-...`) with `connections:write`; required for Socket Mode |
+| `ARYHANT_SLACK_BOT_TOKEN` | Bot user OAuth token (`xoxb-...`); required for posting messages and downloading attachments |
+| `ARYHANT_SLACK_APP_TOKEN` | App-level token (`xapp-...`) with `connections:write`; required for Socket Mode |
 
 `python -m chat_agent.main slack` runs in the foreground. It must stay running to process Socket Mode events.
 
@@ -80,10 +80,10 @@ The fastest and most reliable way to configure the Slack app with all required s
 3. **Generate App-Level Token**:
    - Go to **Basic Information** $\rightarrow$ **App-Level Tokens** $\rightarrow$ **Generate Token and Scopes**.
    - Set the token name (e.g. `socket-mode`), add the `connections:write` scope, and click **Generate**.
-   - Copy this token (`xapp-...`) and set it as `SLACK_APP_TOKEN` in `.env`.
+   - Copy this token (`xapp-...`) and set it as `ARYHANT_SLACK_APP_TOKEN` in `.env`.
 4. **Install App to Workspace**:
    - Go to **Install App** in the left sidebar $\rightarrow$ click **Install to Workspace** $\rightarrow$ **Allow**.
-   - Copy the **Bot User OAuth Token** (`xoxb-...`) and set it as `SLACK_BOT_TOKEN` in `.env`.
+   - Copy the **Bot User OAuth Token** (`xoxb-...`) and set it as `ARYHANT_SLACK_BOT_TOKEN` in `.env`.
 5. **Invite Bot**:
    - In Slack, invite the bot to your channel by running `/invite @Aryhant`.
 
@@ -92,7 +92,7 @@ The fastest and most reliable way to configure the Slack app with all required s
 `start_slack()` in `src/chat_agent/slack/slack_app.py` builds an `AsyncApp` from the bot token and launches `AsyncSocketModeHandler` using the app-level token:
 
 - **Socket Mode** must be toggled **On** in your Slack App configuration when running locally.
-- An **App-Level Token** with the `connections:write` scope must be created and set as `SLACK_APP_TOKEN`.
+- An **App-Level Token** with the `connections:write` scope must be created and set as `ARYHANT_SLACK_APP_TOKEN`.
 
 Socket Mode establishes an outbound WebSocket to Slack, eliminating the need for a public IP, ngrok tunnel, or incoming webhook URL during local development.
 
@@ -168,7 +168,7 @@ Modifying OAuth scopes requires **reinstalling the app to your workspace**:
 Verify token validity and active scopes using the Slack SDK:
 
 ```bash
-python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.environ['SLACK_BOT_TOKEN']).auth_test(); print('BOT='+r['user']); print('USER_ID='+r['user_id']); print('SCOPES='+(r.headers.get('x-oauth-scopes') or 'NONE'))"
+python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.environ['ARYHANT_SLACK_BOT_TOKEN']).auth_test(); print('BOT='+r['user']); print('USER_ID='+r['user_id']); print('SCOPES='+(r.headers.get('x-oauth-scopes') or 'NONE'))"
 ```
 
 ## Troubleshooting Matrix

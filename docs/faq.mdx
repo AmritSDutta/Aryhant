@@ -35,13 +35,13 @@ The bot requires four core Bot Token Scopes configured under **OAuth & Permissio
 Slack bakes granted OAuth scopes into the token at install time. Editing the scope list under **OAuth & Permissions** only modifies the requested permission manifest:
 1. After adding any scope (such as `files:write`), navigate to **Install App** in the left sidebar.
 2. Click **Reinstall to Workspace**.
-3. Confirm the permissions. The existing `SLACK_BOT_TOKEN` will now inherit the updated scope.
+3. Confirm the permissions. The existing `ARYHANT_SLACK_BOT_TOKEN` will now inherit the updated scope.
 
 ### How do I check active token scopes programmatically?
 Query Slack's `auth.test` endpoint directly:
 
 ```bash
-python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.environ['SLACK_BOT_TOKEN']).auth_test(); print('BOT='+r['user']); print('SCOPES='+(r.headers.get('x-oauth-scopes') or 'NONE'))"
+python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.environ['ARYHANT_SLACK_BOT_TOKEN']).auth_test(); print('BOT='+r['user']); print('SCOPES='+(r.headers.get('x-oauth-scopes') or 'NONE'))"
 ```
 
 ---
@@ -93,7 +93,7 @@ Yes. **Jev** (`jev-latest`) is TypeSafe AI's System One decision model, integrat
 ### Why do only PING and PONG appear continuously?
 The WebSocket connection is active, but Slack has no events to route to the app:
 1. **Missing Subscriptions**: Check that `app_mention` and `message.im` are subscribed under **Event Subscriptions**.
-2. **App Token Mismatch**: Verify that `SLACK_APP_TOKEN` belongs to the exact same Slack app as `SLACK_BOT_TOKEN`.
+2. **App Token Mismatch**: Verify that `ARYHANT_SLACK_APP_TOKEN` belongs to the exact same Slack app as `ARYHANT_SLACK_BOT_TOKEN`.
 3. **Channel Membership**: In public or private channels, the bot must be invited (`/invite @Aryhant`).
 
 ### Why does the text response arrive immediately before the PDF?

@@ -17,7 +17,7 @@ def build_slack_app() -> Any:
         raise ImportError(
             "slack_bolt is not installed. Install with `pip install slack-bolt`."
         ) from err
-    app = AsyncApp(token=settings.slack_bot_token)
+    app = AsyncApp(token=settings.aryhant_slack_bot_token)
     _register_handlers(app)
     return app
 
@@ -91,11 +91,11 @@ async def start_slack() -> None:
         ) from err
     slack_app = build_slack_app()
     logger.info("Starting Slack Socket Mode listener.")
-    handler = AsyncSocketModeHandler(slack_app, settings.slack_app_token)
+    handler = AsyncSocketModeHandler(slack_app, settings.aryhant_slack_app_token)
     await handler.start_async()
 
 
 def run_slack_blocking() -> None:
     if not slack_ready():
-        raise RuntimeError("Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN before starting Slack.")
+        raise RuntimeError("Set ARYHANT_SLACK_BOT_TOKEN and ARYHANT_SLACK_APP_TOKEN before starting Slack.")
     asyncio.run(start_slack())

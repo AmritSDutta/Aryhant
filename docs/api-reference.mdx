@@ -96,7 +96,7 @@ Receives Slack Events API notifications forwarded via Cloudflare Worker and Upst
 #### Processing Behavior
 1. **URL Verification**: If `payload["type"] == "url_verification"`, immediately returns `{"challenge": payload["challenge"]}`.
 2. **Authorization**: Validates headers via `authorize_webhook`. Returns `401 Unauthorized` if mismatched, or `503 Service Unavailable` if secrets are unconfigured.
-3. **Service Check**: Verifies `slack_http_ready()` (`SLACK_BOT_TOKEN` present).
+3. **Service Check**: Verifies `slack_http_ready()` (`ARYHANT_SLACK_BOT_TOKEN` present).
 4. **Asynchronous Dispatch**: Returns `{"ok": true}` within milliseconds and delegates execution to `handle_slack_payload` in FastAPI `BackgroundTasks`.
 
 ---

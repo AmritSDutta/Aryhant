@@ -74,7 +74,7 @@ Located in `src/chat_agent/utils/multimodal.py`:
 
 ### 2. Authenticated Download & Size Budgets (`download_slack_file`)
 
-- Downloads content via `httpx.AsyncClient` with `Authorization: Bearer <SLACK_BOT_TOKEN>`.
+- Downloads content via `httpx.AsyncClient` with `Authorization: Bearer <ARYHANT_SLACK_BOT_TOKEN>`.
 - **Per-File Budget**: Enforces `MAX_SINGLE_ATTACHMENT_SIZE_KB = 500` (500 KB). Oversized files raise a `ValueError` and are skipped.
 - **Cumulative Budget**: Enforces `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB = 2` (2 MB total). Remaining files are skipped once the cumulative budget is exhausted.
 - **CDN Auth Guard**: Detects if Slack returned an HTML login page (`text/html`) instead of the requested binary file and rejects invalid downloads.

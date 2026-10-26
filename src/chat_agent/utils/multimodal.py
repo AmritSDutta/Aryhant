@@ -61,7 +61,7 @@ async def download_slack_file(
     max_size_bytes: Optional[int] = None,
 ) -> Tuple[bytes, str]:
     """Download attachment bytes from Slack private URL using bot token authentication."""
-    token = bot_token or settings.slack_bot_token
+    token = bot_token or settings.aryhant_slack_bot_token
     limit = max_size_bytes or (settings.MAX_SINGLE_ATTACHMENT_SIZE_KB * 1024)
     headers = {"Authorization": f"Bearer {token}"} if token else {}
 

@@ -124,7 +124,7 @@ Create an app at <https://api.slack.com/apps>:
 - Add Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:history`, `files:write`.
 - Subscribe to `app_mention` and `message.im` bot events.
 - Create an app-level token with `connections:write`.
-- Install the app and set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` in `.env`.
+- Install the app and set `ARYHANT_SLACK_BOT_TOKEN` and `ARYHANT_SLACK_APP_TOKEN` in `.env`.
 
 ```bash
 python -m chat_agent.main slack

@@ -61,18 +61,27 @@ The earlier architecture used Google ADK's `Agent`, `Runner`, `InMemorySessionSe
 ## Search Dependencies & Fallbacks
 
 ### Does Tavily require an API key?
-No. Tavily Search and Extract support keyless access via `X-Tavily-Access-Mode: keyless` with zero configuration. `TavilySearchTool` tries keyless mode first on every request. If keyless access hits rate limits and `TAVILY_API_KEY` is configured, it automatically falls back to authenticated keyed mode via the SDK or keyed REST.
+No. Tavily Search and Extract support keyless access via `X-Tavily-Access-Mode: keyless` with zero configuration. `TavilySearchTool` executes in exactly two parts:
+1. **Part 1 (Keyless)**: Tries unauthenticated search via direct REST with `X-Tavily-Access-Mode: keyless`.
+2. **Part 2 (TavilyClient Fallback)**: If keyless fails and `TAVILY_API_KEY` is configured, tries `TavilyClient(api_key=self.api_key)`.
+3. **Clean Exit**: If `TavilyClient` fails or is unconfigured, it does not retry. It immediately returns `"tavily failed try with some other websearch"`, allowing `WebSearchToolPool` to fall back to other providers.
 
-### What happens if `tavily-python` is missing or keyless limits are hit?
-The search pool in `src/chat_agent/tools/tool_factory.py` implements multi-layer resilience:
-- **Keyless-First REST**: Executes keyless HTTP requests with `X-Tavily-Access-Mode: keyless` against `https://api.tavily.com/search` and `https://api.tavily.com/extract`.
-- **Keyed SDK / REST Fallback**: If keyless fails and `TAVILY_API_KEY` is provided, the tool retries via `tavily.TavilyClient` (if installed) or keyed REST with `Authorization: Bearer <key>`.
-- **Pool Failover**: If Tavily fails or lacks an API key fallback, the weighted search pool automatically falls back to DuckDuckGo, Exa, Firecrawl, or Serper without failing the user request.
+### How does DuckDuckGo search avoid bot challenges and snippet drift?
+DuckDuckGo search is implemented in a dedicated modular engine in `src/chat_agent/tools/duckduckgo_search.py`:
+- **Bot Challenge Detection**: `is_ddg_challenge_page()` scans response HTML for bot-challenge signatures (`anomaly`, `cf-challenge`, `challenge-platform`) that return HTTP 200, ensuring `WebSearchToolPool` treats them as failures rather than silent empty results.
+- **Target URL Unwrapping**: `extract_real_url()` decodes `uddg=` query parameters into clean canonical destination URLs and filters out `/y.js` ad trackers.
+- **Block-Scoped Parsing**: `parse_ddg_html()` isolates HTML into individual result blocks before extracting titles and snippets, preventing snippet drift across adjacent results.
+- **Library Integration**: Primary search uses the official `ddgs` Python package (`ddgs.DDGS().text()`) via context managers.
 
-### Why did DuckDuckGo log `DuckDuckGo REST fallback failed: No module named 'bs4'`?
-When DuckDuckGo's library search hit rate limits or failed, the REST HTML scraper attempted to import BeautifulSoup (`bs4`). If `beautifulsoup4` was not installed, it logged an error.
-- **Dependency Declared**: `ddgs`, `duckduckgo-search>=6.0.0`, `beautifulsoup4>=4.12.0`, and `requests>=2.31.0` are now pinned in `requirements.txt`.
-- **Zero-Dependency Regex Fallback**: `DuckDuckGoSearchTool` now includes a resilient fallback using Python's standard library `re` and `html.unescape` so HTML parsing never crashes even in minimal container environments lacking `bs4`.
+---
+
+## Question Generation & TypeSafe Curation
+
+### Are we using Jev in this project?
+Yes. **Jev** (`jev-latest`) is TypeSafe AI's System One decision model, integrated via `typesafe-sdk`:
+1. In `src/chat_agent/utils/fast_decision/typesafe_integrator.py`, `get_feedback()` uses `client.system_one(state=..., questions=...)` with `Noul` evaluations to score pedagogical hint clarity on a calibrated 0.0 to 1.0 probability scale.
+2. In `src/chat_agent/agents/question_generator.py`, the pipeline generates 15–20 candidate questions for St. Xavier's Grade 5 ICSE syllabus and uses Jev to rank and select the top 10 items.
+3. If `TYPESAFE_API_KEY` is not set (`settings.typesafe_ready == False`), Jev is gracefully bypassed and the candidate questions are returned directly.
 
 ---
 

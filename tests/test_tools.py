@@ -89,10 +89,11 @@ def test_tavily_search_keyless_failure_fallback_to_sdk():
     mock_tavily_inst.search.return_value = {
         "results": [{"title": "SDK Title", "url": "https://sdk.com", "content": "SDK Body"}]
     }
-    mock_tavily_mod = MagicMock(TavilyClient=MagicMock(return_value=mock_tavily_inst))
+    mock_cls = MagicMock(return_value=mock_tavily_inst)
+    mock_mod = MagicMock(TavilyClient=mock_cls)
 
     with patch("requests.post", side_effect=requests.RequestException("Rate limited")), \
-         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+         patch.dict("sys.modules", {"tavily": mock_mod, "tavily.tavily": mock_mod}):
         tool = TavilySearchTool(api_key="tvly-keyed-token")
         res = tool.search(query="python fastapi")
         assert len(res.results) == 1

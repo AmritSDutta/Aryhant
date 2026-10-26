@@ -10,6 +10,10 @@ from typing import Any, Dict, List, Optional, Union
 
 import requests
 from chat_agent.config import settings
+from chat_agent.tools.duckduckgo_search import (
+    search_ddgs_library,
+    search_duckduckgo,
+)
 from chat_agent.utils.openai_utility import generate_openai_summary
 from pydantic import BaseModel, Field
 
@@ -31,8 +35,8 @@ class SearchProvider(str, Enum):
 DEFAULT_TOOL_WEIGHTS: Dict[str, float] = {
     SearchProvider.DUCKDUCKGO.value: 25.0,
     SearchProvider.EXA.value: 20.0,
-    SearchProvider.FIRECRAWL.value: 25.0,
-    SearchProvider.TAVILY.value: 25.0,
+    SearchProvider.FIRECRAWL.value: 20.0,
+    SearchProvider.TAVILY.value: 30.0,
     SearchProvider.SERPER.value: 5.0,
 }
 
@@ -226,7 +230,11 @@ class TavilySearchTool(BaseWebSearchTool):
         )
 
     def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
-        """Extract web content from URLs via Tavily /extract. Tries keyless first; falls back to TavilyClient on failure."""
+        """
+        Extract web content from URLs via Tavily /extract.
+        Tries keyless first; falls back to TavilyClient on failure.
+        """
+
         url = "https://api.tavily.com/extract"
 
         try:
@@ -412,104 +420,36 @@ class DuckDuckGoSearchTool(BaseWebSearchTool):
         return True
 
     def _search_ddgs_library(self, query: str, max_results: int) -> Optional[List[Dict[str, Any]]]:
-        """Try searching via DDGS Python package if installed."""
-        try:
-            try:
-                from ddgs import DDGS
-            except (ImportError, ModuleNotFoundError):
-                from duckduckgo_search import DDGS
+        """Delegate library search to duckduckgo_search module."""
+        return search_ddgs_library(query, max_results=max_results)
 
-            with DDGS() as ddgs:
-                return list(ddgs.text(query, max_results=max_results))
-        except (ImportError, ModuleNotFoundError) as e_import:
-            logger.debug(f"DuckDuckGo library package not installed ({e_import}), attempting REST fallback...")
-            return None
-        except Exception as e_ddg:
-            logger.warning(f"DDGS library search failed ({e_ddg}), attempting REST fallback...")
-            return None
-
-    def search(self, query: str, max_results: int = 5, **kwargs) -> NormalizedSearchResponse:
-        results = []
-        raw_res = None
+    def search(self, query: str, max_results: int = 5, **kwargs: Any) -> NormalizedSearchResponse:
+        """Execute DuckDuckGo search using ddgs library with block-scoped HTML fallback."""
         effective_max = min(max_results, getattr(settings, "DUCKDUCKGO_MAX_RESULTS", 5))
         max_snippet_len = getattr(settings, "SEARCH_MAX_SNIPPET_LENGTH", 500)
 
-        raw_items = self._search_ddgs_library(query, effective_max)
+        raw_items = search_duckduckgo(
+            query=query,
+            max_results=effective_max,
+            max_snippet_len=max_snippet_len,
+        )
 
-        if raw_items is not None:
-            raw_res = {"results": raw_items}
-            for item in raw_items[:effective_max]:
-                content_text = (item.get("body") or item.get("snippet") or "")[:max_snippet_len]
-                results.append(
-                    SearchResultItem(
-                        title=item.get("title", ""),
-                        url=item.get("href") or item.get("url", ""),
-                        content=content_text,
-                        provider=self.name,
-                    )
-                )
-        else:
-            try:
-                url = "https://html.duckduckgo.com/html/"
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-                data = {"q": query}
-                resp = requests.post(url, data=data, headers=headers, timeout=10)
-                resp.raise_for_status()
-
-                try:
-                    from bs4 import BeautifulSoup
-
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    results_elements = soup.find_all("div", class_="result__body")
-                    for elem in results_elements[:effective_max]:
-                        title_elem = elem.find("a", class_="result__a")
-                        snippet_elem = elem.find("a", class_="result__snippet")
-                        if title_elem:
-                            title = title_elem.get_text(strip=True)
-                            href = title_elem.get("href", "")
-                            snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
-                            snippet = snippet[:max_snippet_len]
-                            results.append(
-                                SearchResultItem(
-                                    title=title,
-                                    url=href,
-                                    content=snippet,
-                                    provider=self.name,
-                                )
-                            )
-                except (ImportError, ModuleNotFoundError):
-                    import html
-                    import re
-
-                    pattern = re.compile(
-                        r'<a class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?(?:<a class="result__snippet"[^>]*>(.*?)</a>|<div class="result__snippet"[^>]*>(.*?)</div>)',
-                        re.DOTALL | re.IGNORECASE,
-                    )
-                    for match in pattern.finditer(resp.text):
-                        if len(results) >= effective_max:
-                            break
-                        href, raw_title, snip1, snip2 = match.groups()
-                        title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
-                        raw_snip = snip1 or snip2 or ""
-                        snippet = html.unescape(re.sub(r"<[^>]+>", "", raw_snip).strip())[:max_snippet_len]
-                        if title:
-                            results.append(
-                                SearchResultItem(
-                                    title=title,
-                                    url=href,
-                                    content=snippet,
-                                    provider=self.name,
-                                )
-                            )
-            except Exception as e_rest:
-                logger.error(f"DuckDuckGo REST fallback failed: {e_rest}")
+        results = [
+            SearchResultItem(
+                title=item.get("title", ""),
+                url=item.get("url", ""),
+                content=item.get("snippet", ""),
+                provider=self.name,
+            )
+            for item in raw_items
+        ]
 
         return NormalizedSearchResponse(
             query=query,
             provider=self.name,
             answer=None,
             results=results,
-            raw_response=raw_res,
+            raw_response={"results": raw_items} if raw_items else None,
         )
 
 
@@ -784,7 +724,8 @@ def generate_study_notes_pdf(
         "status": "queued",
         "title": title,
         "subject": subject,
-        "message": "PDF compilation and Slack delivery are running in the background; the file will appear in the thread shortly.",
+        "message": "PDF compilation and Slack delivery are running in the background; "
+                   "the file will appear in the thread shortly.",
     }
 
 

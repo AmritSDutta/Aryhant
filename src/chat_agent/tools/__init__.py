@@ -1,3 +1,4 @@
+from chat_agent.tools.duckduckgo_search import search_duckduckgo
 from chat_agent.tools.tool_factory import (
     BaseWebSearchTool,
     DuckDuckGoSearchTool,
@@ -24,4 +25,5 @@ __all__ = [
     "DuckDuckGoSearchTool",
     "WebSearchToolPool",
     "extract_web_content",
+    "search_duckduckgo",
 ]

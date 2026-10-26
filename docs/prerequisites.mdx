@@ -36,6 +36,57 @@ RuntimeError: Set USER_LLM_API_KEY in .env before starting the agent.
 
 ## 2. Slack App Configuration
 
+### 1-Click Setup via Slack App Manifest
+
+The fastest and most reliable way to configure the Slack app with all required scopes and event subscriptions is using Slack's App Manifest:
+
+1. Navigate to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**.
+2. Select **From an app manifest**, choose your target Slack workspace, and paste the following JSON:
+
+```json
+{
+  "display_information": {
+    "name": "Aryhant Agent",
+    "description": "Aryhant AI Assistant with Multimodal and PDF capabilities"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Aryhant",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "chat:write",
+        "files:write",
+        "im:history"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": [
+        "app_mention",
+        "message.im"
+      ]
+    },
+    "socket_mode_enabled": true
+  }
+}
+```
+
+3. **Generate App-Level Token**:
+   - Go to **Basic Information** $\rightarrow$ **App-Level Tokens** $\rightarrow$ **Generate Token and Scopes**.
+   - Set the token name (e.g. `socket-mode`), add the `connections:write` scope, and click **Generate**.
+   - Copy this token (`xapp-...`) and set it as `SLACK_APP_TOKEN` in `.env`.
+4. **Install App to Workspace**:
+   - Go to **Install App** in the left sidebar $\rightarrow$ click **Install to Workspace** $\rightarrow$ **Allow**.
+   - Copy the **Bot User OAuth Token** (`xoxb-...`) and set it as `SLACK_BOT_TOKEN` in `.env`.
+5. **Invite Bot**:
+   - In Slack, invite the bot to your channel by running `/invite @Aryhant`.
+
 ### Socket Mode and the App-Level Token
 
 `start_slack()` in `src/chat_agent/slack/slack_app.py` builds an `AsyncApp` from the bot token and launches `AsyncSocketModeHandler` using the app-level token:

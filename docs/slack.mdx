@@ -19,6 +19,16 @@ python -m chat_agent.main slack
 - **Required Tokens**: `SLACK_BOT_TOKEN` (`xoxb-...`) and `SLACK_APP_TOKEN` (`xapp-...`).
 - **Prerequisites**: Socket Mode enabled in the Slack console, bot events `app_mention` and `message.im` subscribed, and bot scopes (`app_mentions:read`, `chat:write`, `im:history`, `files:write`) granted.
 
+### Quick Start: 1-Click Manifest Setup
+
+To configure a new Slack bot in under a minute without manual checkbox setup:
+
+1. Create a new app at [api.slack.com/apps](https://api.slack.com/apps) $\rightarrow$ select **From an app manifest**.
+2. Paste the official manifest JSON from [Prerequisites](/prerequisites#1-click-setup-via-slack-app-manifest).
+3. Under **Basic Information** $\rightarrow$ **App-Level Tokens**, generate an `xapp-...` token with scope `connections:write` (`SLACK_APP_TOKEN`).
+4. Under **Install App**, click **Install to Workspace** and copy the `xoxb-...` token (`SLACK_BOT_TOKEN`).
+5. Run `python -m chat_agent.main slack` and invite the bot to your channels with `/invite @Aryhant`.
+
 ## 2. Production: HTTP Events API & Scale-to-Zero
 
 In serverless environments like Google Cloud Run, holding open persistent WebSockets is inefficient and prevents scaling down to zero instances. Instead, the bot processes webhook payloads delivered to `POST /webhooks/slack`.

@@ -24,7 +24,7 @@ flowchart TD
     Pruning["In-Memory Binary Pruning - Session History"]
   end
   subgraph AgentLayer["Direct Model Engine"]
-    Runner["Direct Runner - runner.py"]
+    Runner["Direct Runner - gemini_model_runner.py"]
     GenAI["Google GenAI / OpenAI Execution"]
   end
   Event --> Dedup
@@ -85,7 +85,7 @@ Content safety is enforced through configurable layers:
 
 1. **Gemini Native Moderation Fast Path** (Default):
    - When `IS_GEMINI_MODERATION_ENOUGH=true`, external moderation APIs are bypassed.
-   - Relies on Gemini's built-in `types.SafetySetting` configured in `runner.py` (blocking medium/high harm for hate speech, harassment, dangerous content, and sexual content), minimizing latency and external API costs.
+   - Relies on Gemini's built-in `types.SafetySetting` configured in `gemini_model_runner.py` (blocking medium/high harm for hate speech, harassment, dangerous content, and sexual content), minimizing latency and external API costs.
 2. **External Moderation Pipeline** (When `IS_GEMINI_MODERATION_ENOUGH=false`):
    - **Regex Scan**: Evaluates prompts against compiled patterns for shell injection, SQL injection, docker abuse, and system commands in `src/chat_agent/utils/input_validation.py`.
    - **Groq Prompt Guard**: Calls `meta-llama/llama-prompt-guard-2-22m` when `GROQ_API_KEY` is provided.
@@ -101,7 +101,7 @@ Constructs a `google.genai.types.Content` object:
 
 To prevent image/audio tokens from bloating context windows across multi-turn conversations, media is sanitized after processing:
 
-- **Session History Pruning** (`_prune_prior_binary_parts` in `src/chat_agent/agents/runner.py`):
+- **Session History Pruning** (`_prune_prior_binary_parts` in `src/chat_agent/agents/gemini_model_runner.py`):
   - Walks the stored session history in `_HISTORY[session_id]`.
   - Replaces all binary `inline_data` parts with `[Attachment: <mime> - processed in prior turn]`.
 

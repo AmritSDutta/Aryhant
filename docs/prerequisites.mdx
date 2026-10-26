@@ -50,6 +50,11 @@ The fastest and most reliable way to configure the Slack app with all required s
     "description": "Aryhant AI Assistant with Multimodal and PDF capabilities"
   },
   "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
     "bot_user": {
       "display_name": "Aryhant",
       "always_online": true
@@ -61,7 +66,8 @@ The fastest and most reliable way to configure the Slack app with all required s
         "app_mentions:read",
         "chat:write",
         "files:write",
-        "im:history"
+        "im:history",
+        "files:read"
       ]
     }
   },
@@ -181,3 +187,4 @@ python -c "import os; from slack_sdk import WebClient; r=WebClient(token=os.envi
 | Scope visible in console but missing in `auth.test` | App was not reinstalled after scope update | Click Reinstall to Workspace |
 | `@mention` in channel ignored | Bot is not a member of the channel | Run `/invite @Aryhant` in the target channel |
 | Process exits at startup | Missing `USER_LLM_API_KEY` | Set `USER_LLM_API_KEY` in `.env` |
+| "Sending messages to this app has been turned off" | Messages Tab disabled in App Home | Under **Features** $\rightarrow$ **App Home** $\rightarrow$ **Show Tabs**, check **Messages Tab** and enable sending messages |

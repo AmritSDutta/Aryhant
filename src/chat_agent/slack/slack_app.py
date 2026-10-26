@@ -25,14 +25,22 @@ def build_slack_app() -> Any:
 def _register_handlers(app: Any) -> None:
     @app.event("app_mention")
     async def on_app_mention(event: dict[str, Any]) -> None:
+        logger.info("Received app_mention event: %s", event)
         await _handle_event(app, event)
 
-    if not settings.REPLY_ONLY_TO_MENTIONS:
-
-        @app.event("message")
-        async def on_message(event: dict[str, Any]) -> None:
-            if event.get("channel_type") in {"im", "mpim"}:
-                await _handle_event(app, event)
+    @app.event("message")
+    async def on_message(event: dict[str, Any]) -> None:
+        if event.get("bot_id") or event.get("subtype") == "bot_message":
+            return
+        # Always handle 1-on-1 Direct Messages (DMs)
+        if event.get("channel_type") in {"im", "mpim"}:
+            logger.info("Received direct message (DM) event: %s", event)
+            await _handle_event(app, event)
+            return
+        # In channels, only reply if not restricted to mentions
+        if not settings.REPLY_ONLY_TO_MENTIONS:
+            logger.info("Received channel message event: %s", event)
+            await _handle_event(app, event)
 
 
 async def _handle_event(app: Any, event: dict[str, Any]) -> None:
@@ -41,6 +49,7 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
     text = (event.get("text") or "").strip()
     if not channel or not text:
         return
+    logger.info("Processing Slack event for user=%s in channel=%s: %r", event.get("user"), channel, text)
 
     user = event.get("user") or "slack-user"
     thread_ts = event.get("thread_ts") or ""

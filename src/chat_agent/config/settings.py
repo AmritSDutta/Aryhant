@@ -47,8 +47,11 @@ class Settings(BaseSettings):
     NEBIUS_API_KEY: str = ""
     NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
     NEBIUS_MODEL: str = "nvidia/Nemotron-3.5-Super-VL"
+    QUESTION_GENERATOR_PROVIDER: str = "nebius"  #"gemini"
+    NEBIUS_QUESTION_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    NEBIUS_QUESTION_FALLBACK_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
     MAX_INPUT_CHARS: int = 5000
-    MAX_OUTPUT_TOKENS: int = 2048
+    MAX_OUTPUT_TOKENS: int = 8000
     REPLY_ONLY_TO_MENTIONS: bool = True
 
     # Slack Integration
@@ -267,6 +270,10 @@ class Settings(BaseSettings):
         return self.QSTASH_NEXT_SIGNING_KEY
 
     @property
+    def nebius_api_key(self) -> str:
+        return self.NEBIUS_API_KEY or os.getenv("NEBIUS_API_KEY", "")
+
+    @property
     def openai_api_key(self) -> str:
         return self.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY", "")
 
@@ -289,6 +296,18 @@ class Settings(BaseSettings):
     @property
     def grafana_user_id(self) -> str:
         return self.GRAFANA_USER_ID or os.getenv("GRAFANA_USER_ID", "")
+
+    @property
+    def question_generator_provider(self) -> str:
+        return self.QUESTION_GENERATOR_PROVIDER
+
+    @property
+    def nebius_question_model(self) -> str:
+        return self.NEBIUS_QUESTION_MODEL
+
+    @property
+    def nebius_question_fallback_model(self) -> str:
+        return self.NEBIUS_QUESTION_FALLBACK_MODEL
 
 
 settings = Settings()

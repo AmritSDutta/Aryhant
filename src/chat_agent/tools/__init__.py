@@ -1,4 +1,5 @@
 from chat_agent.tools.duckduckgo_search import search_duckduckgo
+from chat_agent.tools.math_tool import calculate_math
 from chat_agent.tools.tool_factory import (
     BaseWebSearchTool,
     DuckDuckGoSearchTool,
@@ -11,6 +12,12 @@ from chat_agent.tools.tool_factory import (
     TavilySearchTool,
     WebSearchToolPool,
     extract_web_content,
+    generate_infographic_pdf,
+    generate_practice_questions,
+    generate_study_notes_pdf,
+    get_current_time,
+    search_web,
+    upload_file_to_slack,
 )
 
 __all__ = [
@@ -26,4 +33,11 @@ __all__ = [
     "WebSearchToolPool",
     "extract_web_content",
     "search_duckduckgo",
+    "calculate_math",
+    "generate_practice_questions",
+    "generate_study_notes_pdf",
+    "generate_infographic_pdf",
+    "get_current_time",
+    "search_web",
+    "upload_file_to_slack",
 ]

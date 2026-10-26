@@ -93,7 +93,7 @@ def test_tavily_search_keyless_failure_fallback_to_sdk():
     mock_mod = MagicMock(TavilyClient=mock_cls)
 
     with patch("requests.post", side_effect=requests.RequestException("Rate limited")), \
-         patch.dict("sys.modules", {"tavily": mock_mod, "tavily.tavily": mock_mod}):
+            patch.dict("sys.modules", {"tavily": mock_mod, "tavily.tavily": mock_mod}):
         tool = TavilySearchTool(api_key="tvly-keyed-token")
         res = tool.search(query="python fastapi")
         assert len(res.results) == 1
@@ -116,7 +116,7 @@ def test_tavily_search_failure_returns_tavily_failed_message():
     mock_tavily_mod = MagicMock()
     mock_tavily_mod.TavilyClient.side_effect = Exception("SDK connection error")
     with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
-         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+            patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
         tool_keyed = TavilySearchTool(api_key="tvly-secret")
         res_keyed = tool_keyed.search(query="python fastapi")
         assert res_keyed.answer == "tavily failed try with some other websearch"
@@ -137,9 +137,9 @@ def test_web_search_tool_pool_tavily_failure_falls_back():
     )
 
     with patch.object(tavily_tool, "search", return_value=NormalizedSearchResponse(
-        query="test", provider="tavily", answer="tavily failed try with some other websearch", results=[]
+            query="test", provider="tavily", answer="tavily failed try with some other websearch", results=[]
     )), patch.object(ddg_tool, "search", return_value=mock_ddg_res), \
-         patch.object(pool, "get_configured_providers", return_value=[tavily_tool, ddg_tool]):
+            patch.object(pool, "get_configured_providers", return_value=[tavily_tool, ddg_tool]):
         res = pool.search(query="test", provider="tavily")
         assert res.provider == "duckduckgo"
         assert len(res.results) == 1
@@ -168,7 +168,7 @@ def test_tavily_extract_keyless_and_fallback():
     mock_client.extract.return_value = {"results": [{"url": "https://example.com", "raw_content": "SDK extract"}]}
     mock_tavily_mod = MagicMock(TavilyClient=MagicMock(return_value=mock_client))
     with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
-         patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
+            patch.dict("sys.modules", {"tavily": mock_tavily_mod}):
         tool = TavilySearchTool(api_key="tvly-secret")
         results = tool.extract(["https://example.com"])
         assert len(results) == 1
@@ -178,7 +178,7 @@ def test_tavily_extract_keyless_and_fallback():
     mock_client_fail = MagicMock()
     mock_client_fail.extract.side_effect = Exception("SDK error")
     with patch("requests.post", side_effect=requests.RequestException("Keyless rate limit")), \
-         patch.dict("sys.modules", {"tavily": MagicMock(TavilyClient=MagicMock(return_value=mock_client_fail))}):
+            patch.dict("sys.modules", {"tavily": MagicMock(TavilyClient=MagicMock(return_value=mock_client_fail))}):
         tool = TavilySearchTool(api_key="tvly-secret")
         results = tool.extract(["https://example.com"])
         assert len(results) == 1
@@ -223,7 +223,7 @@ async def test_search_async_delegates_to_thread():
 def test_web_search_tool_pool_configured_selection():
     pool = WebSearchToolPool()
     with patch.object(pool.tools[SearchProvider.TAVILY.value], "is_configured", return_value=True), patch.object(
-        pool.tools[SearchProvider.EXA.value], "is_configured", return_value=False
+            pool.tools[SearchProvider.EXA.value], "is_configured", return_value=False
     ), patch.object(
         pool.tools[SearchProvider.FIRECRAWL.value], "is_configured", return_value=False
     ), patch.object(
@@ -314,7 +314,6 @@ def test_search_web_tool_returns_json_serializable_dict():
         assert "Summary answer" in serialized
 
 
-
 def test_search_tool_candidate_and_failover_logging(caplog):
     import logging
     from chat_agent.tools.tool_factory import WebSearchToolPool, BaseWebSearchTool, NormalizedSearchResponse
@@ -322,14 +321,18 @@ def test_search_tool_candidate_and_failover_logging(caplog):
     class MockFailTool(BaseWebSearchTool):
         def __init__(self):
             super().__init__(name="fail_tool")
+
         def is_configured(self) -> bool: return True
+
         def search(self, query: str, max_results: int = 5, **kwargs):
             raise RuntimeError("API timeout")
 
     class MockSuccessTool(BaseWebSearchTool):
         def __init__(self):
             super().__init__(name="success_tool")
+
         def is_configured(self) -> bool: return True
+
         def search(self, query: str, max_results: int = 5, **kwargs):
             return NormalizedSearchResponse(query=query, provider=self.name, answer=None, results=[])
 
@@ -337,9 +340,46 @@ def test_search_tool_candidate_and_failover_logging(caplog):
     pool.tools = {"fail_tool": MockFailTool(), "success_tool": MockSuccessTool()}
 
     with caplog.at_level(logging.INFO):
-        with patch.object(pool, "_get_weighted_shuffled_candidates", return_value=[pool.tools["fail_tool"], pool.tools["success_tool"]]):
+        with patch.object(pool, "_get_weighted_shuffled_candidates",
+                          return_value=[pool.tools["fail_tool"], pool.tools["success_tool"]]):
             res = pool.search("test query", provider="random")
             assert res.provider == "success_tool"
             assert "[Search Tool] Candidate selected: 'fail_tool'" in caplog.text
             assert "[Search Tool] Failover: 'fail_tool' failed (API timeout). Trying next candidate..." in caplog.text
             assert "[Search Tool] Candidate selected: 'success_tool'" in caplog.text
+
+
+def test_generate_practice_questions_tool() -> None:
+    from chat_agent.schema.fundamental_schema import QuestionAnswerSchema
+    from chat_agent.tools.tool_factory import generate_practice_questions
+
+    mock_q = [
+        QuestionAnswerSchema(id=1, question="What is LCM of 4 and 6?", hint="Multiples of 4 and 6")
+    ]
+    with patch("chat_agent.agents.question_generator.generate_curated_questions", AsyncMock(return_value=mock_q)):
+        res = generate_practice_questions("LCM")
+
+    assert res["status"] == "success"
+    assert res["topic"] == "LCM"
+    assert res["count"] == 1
+    assert res["questions"][0]["id"] == 1
+    assert res["questions"][0]["question"] == "What is LCM of 4 and 6?"
+
+
+def test_calculate_math_tool_success() -> None:
+    from chat_agent.tools.math_tool import calculate_math
+
+    res = calculate_math("(15 * 4) + lcm(12, 18)")
+    assert res["status"] == "ok"
+    assert res["value"] == 60 + 36
+
+    res_gcd = calculate_math("gcd(24, 36)")
+    assert res_gcd["status"] == "ok"
+    assert res_gcd["value"] == 12
+
+    res_zero = calculate_math("10 / 0")
+    assert res_zero["status"] == "ok"
+    assert "not defined" in res_zero["result"]
+
+    res_invalid = calculate_math("__import__('os').system('ls')")
+    assert res_invalid["status"] == "error"

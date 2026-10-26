@@ -14,6 +14,7 @@ from chat_agent.tools.duckduckgo_search import (
     search_ddgs_library,
     search_duckduckgo,
 )
+from chat_agent.tools.math_tool import calculate_math
 from chat_agent.utils.openai_utility import generate_openai_summary
 from pydantic import BaseModel, Field
 
@@ -985,4 +986,41 @@ def upload_file_to_slack(
         "file_name": os.path.basename(file_path),
         "channel": channel,
         "thread_ts": thread_ts,
+    }
+
+
+def generate_practice_questions(topic: str) -> Dict[str, Any]:
+    """Generate structured ICSE Grade 5 practice questions and pedagogical hints for an academic topic."""
+    import asyncio
+    import concurrent.futures
+    from chat_agent.agents.question_generator import generate_curated_questions
+
+    logger.info("[Question Engine] Generating practice questions for topic: '%s'", topic)
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                questions = pool.submit(asyncio.run, generate_curated_questions(topic)).result(timeout=60)
+        else:
+            questions = asyncio.run(generate_curated_questions(topic))
+    except Exception as e:
+        logger.warning("Failed to generate practice questions for topic '%s': %s", topic, e)
+        return {"status": "error", "error": str(e), "questions": []}
+
+    if not questions:
+        return {"status": "empty", "questions": []}
+
+    formatted = [
+        {"id": q.id, "question": q.question, "hint": q.hint}
+        for q in questions
+    ]
+    return {
+        "status": "success",
+        "topic": topic,
+        "count": len(questions),
+        "questions": formatted,
     }

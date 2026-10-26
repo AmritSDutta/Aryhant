@@ -49,7 +49,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   │   ├── model_runner.py         # ModelRunner Protocol & get_model_runner() factory
 │   │   ├── nebius_model_runner.py  # Nebius OpenAI-compatible model runner
 │   │   ├── prompt.py               # Persona & ICSE Grade 5 pedagogical system instructions
-│   │   ├── question_generator.py   # Practice question generator agent
+│   │   ├── question_generator.py   # Practice question generator agent (facade)
 │   │   └── runner.py               # Orchestrator: text clipping, multimodal validation, model delegation
 │   ├── config/                     # Settings, Auth0, rate limiting, QStash auth, logging, Grafana
 │   ├── infographics/               # ReportLab PDF builders (study notes, infographics, diagrams, theme)
@@ -59,6 +59,11 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   │   ├── diagrams.py             # Procedural math & science vector diagrams
 │   │   ├── notes_builder.py        # Handwritten notebook-style study notes PDF generator
 │   │   └── theme.py                # Color palettes and branding definitions
+│   ├── question_generator/         # Dedicated question generation package (Base, Gemini, Nebius)
+│   │   ├── base_question_generator.py # Abstract base class & shared completion helpers
+│   │   ├── gemini_question_generator.py # Google GenAI structured question generator
+│   │   ├── nebius_question_generator.py # Nebius OpenAI-compatible question generator
+│   │   └── __init__.py             # Factory & curation pipeline
 │   ├── schema/                     # Pydantic schemas and data models
 │   ├── slack/                      # Slack Bolt Socket Mode, HTTP events API, Block Kit formatting
 │   ├── tools/                      # Agent tools (web search, PDF generators, Slack uploader, time)

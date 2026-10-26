@@ -15,6 +15,8 @@ from chat_agent.agents.prompt import INSTRUCTION, format_instruction
 from chat_agent.config import settings
 from chat_agent.tools.tool_factory import (
     generate_infographic_pdf,
+    generate_practice_questions,
+    calculate_math,
     generate_study_notes_pdf,
     get_current_time,
     search_web,
@@ -26,10 +28,51 @@ _NEBIUS_HISTORY: dict[str, list[dict[str, Any]]] = {}
 _HISTORY_CAP = 20
 _MAX_TOOL_ROUNDS = 5
 
-_TOOLS: list[Any] = [get_current_time, search_web, generate_study_notes_pdf, generate_infographic_pdf]
+_TOOLS: list[Any] = [
+    get_current_time,
+    search_web,
+    generate_study_notes_pdf,
+    generate_infographic_pdf,
+    generate_practice_questions,
+    calculate_math,
+]
 _TOOL_MAP: dict[str, Any] = {fn.__name__: fn for fn in _TOOLS}
 
 OPENAI_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_math",
+            "description": "Safely evaluate a mathematical or arithmetic expression (e.g. 'lcm(12, 18)', 'gcd(24, 36)', '2**8', '(15 * 4) + 12').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Mathematical expression to safely evaluate.",
+                    },
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_practice_questions",
+            "description": "Generate ICSE Grade 5 curriculum-aligned practice questions and pedagogical hints on any academic topic. Call this whenever practice questions, quizzes, worksheets, or exercise sets are requested, including when preparing study notes containing questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The academic topic or concept to generate practice questions for.",
+                    },
+                },
+                "required": ["topic"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {

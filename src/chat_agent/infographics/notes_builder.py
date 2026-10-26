@@ -64,6 +64,7 @@ def get_reports_dir() -> Path:
     target.mkdir(parents=True, exist_ok=True)
     return target
 
+
 _RULE_SPACING: float = 26.0
 _MARGIN_LINE_X: float = 78.0
 
@@ -158,7 +159,8 @@ class HandwrittenNotesCanvas(canvas.Canvas):
 
         primary_font, _, _, indic_font = _register_notebook_fonts()
         header_text = f"{self.branding.product_name} Study Notes"
-        header_font = indic_font if (indic_font and _INDIC_REGEX.search(header_text if self._pageNumber > 1 else "")) else primary_font
+        header_font = indic_font if (
+                    indic_font and _INDIC_REGEX.search(header_text if self._pageNumber > 1 else "")) else primary_font
         self.setFont(header_font, 7.5)
         self.setFillColor(colors.HexColor("#8C7E68"))
 
@@ -183,6 +185,7 @@ class HandwrittenNotesCanvas(canvas.Canvas):
 
 def _create_notes_canvas_maker(branding: InfographicBranding):
     """Factory creating a HandwrittenNotesCanvas subclass bound to specific branding."""
+
     class BoundNotesCanvas(HandwrittenNotesCanvas):
         pass
 
@@ -326,10 +329,10 @@ class _CardHeading(Flowable):
 
 
 def _draw_notebook_background(
-    c: canvas.Canvas,
-    doc: SimpleDocTemplate,
-    margin_tip: str = "",
-    draw_ruled_lines: bool = False,
+        c: canvas.Canvas,
+        doc: SimpleDocTemplate,
+        margin_tip: str = "",
+        draw_ruled_lines: bool = False,
 ) -> None:
     """Paint cream paper fill, red margin, optional rotated margin tip, and optional ruled lines."""
     c.saveState()
@@ -453,11 +456,11 @@ def _resolve_image_path(path_str: Optional[str]) -> Optional[str]:
 
 
 def _create_image_flowable(
-    img_path: str,
-    caption: str,
-    styles: dict[str, ParagraphStyle],
-    max_w: float = 220.0,
-    max_h: float = 130.0,
+        img_path: str,
+        caption: str,
+        styles: dict[str, ParagraphStyle],
+        max_w: float = 220.0,
+        max_h: float = 130.0,
 ) -> Optional[Table]:
     """Create a scaled ReportLab image Table with an italic caption."""
     try:
@@ -486,10 +489,10 @@ def _create_image_flowable(
 
 
 def _convert_markdown_to_flowables(
-    content: str,
-    styles: dict[str, ParagraphStyle],
-    avail_w: float = 480.0,
-    indic_font: Optional[str] = None,
+        content: str,
+        styles: dict[str, ParagraphStyle],
+        avail_w: float = 480.0,
+        indic_font: Optional[str] = None,
 ) -> list:
     """Parse Markdown content into structured ReportLab flowables."""
     cleaned_math = clean_math_text(content)
@@ -511,20 +514,26 @@ def _convert_markdown_to_flowables(
                 alt_txt, src_txt = line_str[2:-1].split("](", 1)
                 resolved = _resolve_image_path(src_txt.strip())
                 if resolved:
-                    tbl = _create_image_flowable(resolved, alt_txt.strip() or "Diagram", styles, max_w=min(avail_w, 360.0), max_h=180.0)
+                    tbl = _create_image_flowable(resolved, alt_txt.strip() or "Diagram", styles,
+                                                 max_w=min(avail_w, 360.0), max_h=180.0)
                     if tbl is not None:
                         plain_flowables.append(tbl)
                         continue
             if line_str.startswith("# "):
-                plain_flowables.append(Paragraph(_escape_and_wrap_indic(line_str[2:].strip(), indic_font), styles["h1"]))
+                plain_flowables.append(
+                    Paragraph(_escape_and_wrap_indic(line_str[2:].strip(), indic_font), styles["h1"]))
             elif line_str.startswith("## "):
-                plain_flowables.append(Paragraph(_escape_and_wrap_indic(line_str[3:].strip(), indic_font), styles["h2"]))
+                plain_flowables.append(
+                    Paragraph(_escape_and_wrap_indic(line_str[3:].strip(), indic_font), styles["h2"]))
             elif line_str.startswith("### "):
-                plain_flowables.append(Paragraph(_escape_and_wrap_indic(line_str[4:].strip(), indic_font), styles["h3"]))
+                plain_flowables.append(
+                    Paragraph(_escape_and_wrap_indic(line_str[4:].strip(), indic_font), styles["h3"]))
             elif line_str.startswith(("- ", "* ")):
-                plain_flowables.append(Paragraph(f"&bull;  {_escape_and_wrap_indic(line_str[2:].strip(), indic_font)}", styles["bullet"]))
+                plain_flowables.append(
+                    Paragraph(f"&bull;  {_escape_and_wrap_indic(line_str[2:].strip(), indic_font)}", styles["bullet"]))
             elif line_str.startswith("> "):
-                plain_flowables.append(Paragraph(_escape_and_wrap_indic(line_str[2:].strip(), indic_font), styles["blockquote"]))
+                plain_flowables.append(
+                    Paragraph(_escape_and_wrap_indic(line_str[2:].strip(), indic_font), styles["blockquote"]))
             else:
                 plain_flowables.append(Paragraph(_escape_and_wrap_indic(line_str, indic_font), styles["body"]))
         return plain_flowables
@@ -571,7 +580,8 @@ def _convert_markdown_to_flowables(
                 p_text = f"{bullet_prefix}  {li_text}"
                 flowables.append(Paragraph(p_text, styles["bullet"]))
         elif tag == "hr":
-            flowables.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#F2A69D"), spaceAfter=8, spaceBefore=8))
+            flowables.append(
+                HRFlowable(width="100%", thickness=1, color=colors.HexColor("#F2A69D"), spaceAfter=8, spaceBefore=8))
         elif tag == "pre":
             code_elem = elem.find("code")
             code_text = code_elem.text if code_elem is not None and code_elem.text else elem.text or ""
@@ -645,14 +655,14 @@ def _get_sketch_font(size: int = 11, bold: bool = False, for_text: str = "") -> 
 
 
 def _draw_sketch_arrow(
-    draw: ImageDraw.ImageDraw,
-    x1: float,
-    y1: float,
-    x2: float,
-    y2: float,
-    color: tuple[int, int, int] = (26, 41, 66),
-    width: int = 2,
-    head_len: float = 6.0,
+        draw: ImageDraw.ImageDraw,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        color: tuple[int, int, int] = (26, 41, 66),
+        width: int = 2,
+        head_len: float = 6.0,
 ) -> None:
     """Draw a hand-sketched arrow with a directional polygon head."""
     draw.line([(x1, y1), (x2, y2)], fill=color, width=int(width))
@@ -663,11 +673,11 @@ def _draw_sketch_arrow(
 
 
 def render_notebook_sketch(
-    title: str = "",
-    domain: str = "",
-    visual_suggestion: str = "",
-    width: int = 260,
-    height: int = 140,
+        title: str = "",
+        domain: str = "",
+        visual_suggestion: str = "",
+        width: int = 260,
+        height: int = 140,
 ) -> bytes:
     """Render an organic, notebook-style sketch illustration on a transparent canvas."""
     img = Image.new("RGBA", (width, height), (250, 248, 245, 0))
@@ -818,17 +828,17 @@ def render_notebook_sketch(
 
 
 def generate_handwritten_notes_pdf(
-    title: str,
-    content: str,
-    tags: Optional[list[str]] = None,
-    student_email: Optional[str] = None,
-    visual: str = "",
-    image_path: Optional[str] = None,
-    subject: str = "general",
-    margin_tip: str = "",
-    output_path: Optional[str] = None,
-    branding: Optional[Union[InfographicBranding, dict, str, Path]] = None,
-    draw_ruled_lines: bool = False,
+        title: str,
+        content: str,
+        tags: Optional[list[str]] = None,
+        student_email: Optional[str] = None,
+        visual: str = "",
+        image_path: Optional[str] = None,
+        subject: str = "general",
+        margin_tip: str = "",
+        output_path: Optional[str] = None,
+        branding: Optional[Union[InfographicBranding, dict, str, Path]] = None,
+        draw_ruled_lines: bool = False,
 ) -> str:
     """Generate a notebook-styled study notes PDF with ruled paper, margin, and branding."""
     brand = resolve_branding(branding)
@@ -1004,7 +1014,8 @@ def generate_handwritten_notes_pdf(
                 height=140,
             )
             rl_img = RLImage(io.BytesIO(png_bytes), width=220, height=118)
-            caption_p = Paragraph(f"<i>Fig \u2014 {_escape_and_wrap_indic(clean_title, indic_font)}</i>", styles["caption"])
+            caption_p = Paragraph(f"<i>Fig \u2014 {_escape_and_wrap_indic(clean_title, indic_font)}</i>",
+                                  styles["caption"])
             fig_flowable = Table(
                 [[rl_img], [caption_p]],
                 colWidths=[224],

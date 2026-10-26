@@ -27,7 +27,7 @@ async def get_feedback(
     user_input: str = "",
 ) -> list[QuestionAnswerSchema]:
     """Evaluate hint quality using TypeSafe Noul probability (0.0 to 1.0) and return top 10 by score."""
-    logger.info(f"Question and Answer with hint: Total {len(qnah)}")
+    logger.info(f"[Decision model] Question and Answer with hint: Total {len(qnah)}")
     if not qnah:
         return []
 
@@ -47,10 +47,11 @@ async def get_feedback(
     questions: dict[str, Noul] = {
         f"hint_eval_{item.id}": Noul(
             instructions=(
-                f"Score how helpful, clear, and pedagogically effective `item_{item.id}.hint` is "
-                f"for a Grade 5 student attempting `item_{item.id}.question`. "
-                f"Return 1.0 for maximally helpful (process-focused, age-appropriate, not giving away the answer), "
-                f"0.0 for unhelpful or misleading. Consider `user_query` if present."
+                f"""Score how helpful, clear, and pedagogically effective `item_{item.id}.hint` is 
+                for a Grade 5 student attempting `item_{item.id}.question`. 
+                Return 1.0 for maximally helpful (process-focused, age-appropriate, not giving away the answer), 
+                0.0 for unhelpful or misleading. Consider `user_query` if present.
+            """
             )
         )
         for item in qnah
@@ -71,4 +72,5 @@ async def get_feedback(
         results.append(item.model_copy(update={"score": score_val}))
 
     results.sort(key=lambda item: item.score if item.score is not None else -1.0, reverse=True)
+    logger.info('Completed Decision model based evaluation')
     return results[:10]

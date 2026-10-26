@@ -13,6 +13,8 @@ from google.genai import types
 from chat_agent.agents.prompt import INSTRUCTION, format_instruction
 from chat_agent.config import settings
 from chat_agent.tools.tool_factory import (
+    calculate_math,
+    generate_practice_questions,
     generate_infographic_pdf,
     generate_study_notes_pdf,
     get_current_time,
@@ -45,7 +47,14 @@ safety_settings = [
     ),
 ]
 
-_TOOLS: list[Any] = [get_current_time, search_web, generate_study_notes_pdf, generate_infographic_pdf]
+_TOOLS: list[Any] = [
+    get_current_time,
+    search_web,
+    generate_study_notes_pdf,
+    generate_infographic_pdf,
+    calculate_math,
+    generate_practice_questions,
+]
 _TOOL_MAP: dict[str, Any] = {fn.__name__: fn for fn in _TOOLS}
 
 
@@ -202,7 +211,8 @@ async def _run_with_retry_and_fallback(
     fallback_gpt = getattr(settings, "FALLBACK_GPT_MODEL", "gpt-6-luna")
     if fallback_gpt:
         logger.info(
-            "[Model Selection] Phase 2 Failover: All 3 primary attempts failed. Falling back to FALLBACK_GPT_MODEL: '%s'",
+            "[Model Selection] Phase 2 Failover: All 3 primary attempts failed."
+            " Falling back to FALLBACK_GPT_MODEL: '%s'",
             fallback_gpt,
         )
         try:

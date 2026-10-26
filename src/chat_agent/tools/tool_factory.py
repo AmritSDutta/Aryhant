@@ -529,7 +529,8 @@ class WebSearchToolPool:
                 self.call_counts[tool.name] = self.call_counts.get(tool.name, 0) + 1
                 logger.info(
                     f"✅ [WebSearchToolPool] Provider '{tool.name}' search succeeded! "
-                    f"(Call #{self.call_counts[tool.name]} for {tool.name} | Total Pool Usage: {dict(self.call_counts)})"
+                    f"(Call #{self.call_counts[tool.name]} for {tool.name} | "
+                    f"Total Pool Usage: {dict(self.call_counts)})"
                 )
                 return res
             except Exception as e:
@@ -537,7 +538,8 @@ class WebSearchToolPool:
                 errors.append(f"{tool.name}: {e}")
 
         logger.error(f"[WebSearchToolPool] All candidate providers failed for query '{query}': {errors}")
-        failed_answer = "tavily failed try with some other websearch" if any("tavily failed" in err for err in errors) else None
+        failed_answer = \
+            "tavily failed try with some other websearch" if any("tavily failed" in err for err in errors) else None
         return NormalizedSearchResponse(
             query=query,
             provider="error",
@@ -656,7 +658,8 @@ def _generate_study_notes_pdf_sync(
 ) -> Dict[str, Any]:
     """Compile the study notes PDF and auto-upload to Slack; executed on a background thread."""
     import os
-    logger.info("[Notes Engine] Phase 1: Starting study notes PDF compilation for title: '%s' (subject=%s)", title, subject)
+    logger.info("[Notes Engine] Phase 1: Starting study notes PDF compilation for title: '%s' (subject=%s)",
+                title, subject)
     if output_path and not _is_allowed_upload_path(output_path):
         logger.warning("[Notes Engine] Ignoring output_path outside allowed upload directories: %s", output_path)
         output_path = None
@@ -679,10 +682,13 @@ def _generate_study_notes_pdf_sync(
         upload_thread = _normalize_thread_ts(thread_ts)
         upload_status = "not_requested"
         if upload_channel or settings.slack_http_ready:
-            logger.info("[Notes Engine] Phase 2: Triggering auto-upload to Slack (channel=%s, thread_ts=%s)", upload_channel, upload_thread)
-            upload_res = upload_file_to_slack(file_path=target_path, channel=upload_channel, thread_ts=upload_thread, title=title)
+            logger.info("[Notes Engine] Phase 2: Triggering auto-upload to Slack (channel=%s, thread_ts=%s)",
+                        upload_channel, upload_thread)
+            upload_res = upload_file_to_slack(file_path=target_path, channel=upload_channel, thread_ts=upload_thread,
+                                              title=title)
             upload_status = upload_res.get("status", "queued")
-            logger.info("[Notes Engine] Phase 2: Slack upload finished with status=%s for: %s", upload_status, target_path)
+            logger.info("[Notes Engine] Phase 2: Slack upload finished with status=%s for: %s",
+                        upload_status, target_path)
 
         return {
             "status": "success",
@@ -713,8 +719,12 @@ def generate_study_notes_pdf(
     thread_ts: Optional[str] = None,
     output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Queue study notes PDF compilation and Slack delivery on a background thread; returns immediately so the reply is not blocked."""
-    logger.info("[Notes Engine] Queuing background PDF compilation for title: '%s' (subject=%s)", title, subject)
+    """
+    Queue study notes PDF compilation and Slack delivery on a background thread;
+    returns immediately so the reply is not blocked.
+    """
+    logger.info("[Notes Engine] Queuing background PDF compilation for title: '%s' (subject=%s)",
+                title, subject)
     threading.Thread(
         target=_generate_study_notes_pdf_sync,
         args=(title, content, subject, tags, visual, margin_tip, channel, thread_ts, output_path),
@@ -750,16 +760,20 @@ def _generate_infographic_pdf_sync(
             output_path=output_path,
         )
         file_size = os.path.getsize(target_path)
-        logger.info("[Infographic Engine] Phase 1: ✅ Infographic PDF compiled successfully: %s (%d bytes)", target_path, file_size)
+        logger.info("[Infographic Engine] Phase 1: ✅ Infographic PDF compiled successfully: %s (%d bytes)",
+                    target_path, file_size)
 
         upload_channel = _normalize_channel_ref(channel)
         upload_thread = _normalize_thread_ts(thread_ts)
         upload_status = "not_requested"
         if upload_channel or settings.slack_http_ready:
-            logger.info("[Infographic Engine] Phase 2: Triggering auto-upload to Slack (channel=%s, thread_ts=%s)", upload_channel, upload_thread)
-            upload_res = upload_file_to_slack(file_path=target_path, channel=upload_channel, thread_ts=upload_thread, title=title)
+            logger.info("[Infographic Engine] Phase 2: Triggering auto-upload to Slack (channel=%s, thread_ts=%s)",
+                        upload_channel, upload_thread)
+            upload_res = upload_file_to_slack(file_path=target_path, channel=upload_channel, thread_ts=upload_thread,
+                                              title=title)
             upload_status = upload_res.get("status", "queued")
-            logger.info("[Infographic Engine] Phase 2: Slack upload finished with status=%s for: %s", upload_status, target_path)
+            logger.info("[Infographic Engine] Phase 2: Slack upload finished with status=%s for: %s",
+                        upload_status, target_path)
 
         return {
             "status": "success",
@@ -783,7 +797,10 @@ def generate_infographic_pdf(
     thread_ts: Optional[str] = None,
     output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Queue lesson infographic PDF compilation and Slack delivery on a background thread; returns immediately so the reply is not blocked."""
+    """
+    Queue lesson infographic PDF compilation and Slack delivery on a background thread;
+    returns immediately so the reply is not blocked.
+    """
     title = lesson_data.get("title", "Lesson Infographic") if isinstance(lesson_data, dict) else "Lesson Infographic"
     logger.info("[Infographic Engine] Queuing background PDF compilation for: '%s'", title)
     threading.Thread(
@@ -794,7 +811,8 @@ def generate_infographic_pdf(
     return {
         "status": "queued",
         "title": title,
-        "message": "Infographic compilation and Slack delivery are running in the background; the file will appear in the thread shortly.",
+        "message": "Infographic compilation and Slack delivery are running in the background; "
+                   "the file will appear in the thread shortly.",
     }
 
 
@@ -931,7 +949,10 @@ def upload_file_to_slack(
     title: str = "",
     initial_comment: str = "",
 ) -> Dict[str, Any]:
-    """Queue upload of a local file (e.g. PDF study notes) to a Slack thread on a background thread and return immediately."""
+    """
+    Queue upload of a local file (e.g. PDF study notes) to a Slack thread
+    on a background thread and return immediately.
+    """
     import os
 
     channel = _normalize_channel_ref(channel)

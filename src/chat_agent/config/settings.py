@@ -270,18 +270,6 @@ class Settings(BaseSettings):
         return root_dir / p
 
     @property
-    def turso_database_url(self) -> str:
-        return self.ARYHANT_TURSO_DATABASE_URL or os.getenv("ARYHANT_TURSO_DATABASE_URL", "")
-
-    @property
-    def turso_auth_token(self) -> str:
-        return self.ARYHANT_TURSO_AUTH_TOKEN or os.getenv("ARYHANT_TURSO_AUTH_TOKEN", "")
-
-    @property
-    def redis_url(self) -> str:
-        return self.ARYHANT_REDIS_URL or os.getenv("ARYHANT_REDIS_URL", "")
-
-    @property
     def email_ready(self) -> bool:
         return bool(self.EMAIL_ENABLED and self.EMAIL_ADDRESS and self.EMAIL_PASSWORD)
 

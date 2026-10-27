@@ -133,10 +133,15 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
     d_name, r_name = await _resolve_user_names(app.client, user)
     user_sig = (user_id_key, d_name, r_name)
     if user_sig not in _SYNCED_USER_PROFILES:
-        _SYNCED_USER_PROFILES.add(user_sig)
-        profile_task = asyncio.create_task(
-            turso_svc.aupdate_user_profile(user_id_key, display_name=d_name, real_name=r_name)
-        )
+        async def _sync_profile_task() -> None:
+            try:
+                await turso_svc.aupdate_user_profile(user_id_key, display_name=d_name, real_name=r_name)
+                _SYNCED_USER_PROFILES.add(user_sig)
+                logger.info("User profile synced and registered in _SYNCED_USER_PROFILES: %s", user_sig)
+            except Exception as e:
+                logger.warning("Failed to sync user profile %s: %s", user_sig, e)
+
+        profile_task = asyncio.create_task(_sync_profile_task())
         _BACKGROUND_TASKS.add(profile_task)
         profile_task.add_done_callback(_BACKGROUND_TASKS.discard)
 

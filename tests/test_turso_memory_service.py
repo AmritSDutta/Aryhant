@@ -312,9 +312,9 @@ def test_settings_aryhant_env_resolution():
         ARYHANT_TURSO_AUTH_TOKEN="token-primary",
         ARYHANT_REDIS_URL="redis://primary:6379",
     )
-    assert s.turso_database_url == "libsql://primary.turso.io"
-    assert s.turso_auth_token == "token-primary"
-    assert s.redis_url == "redis://primary:6379"
+    assert s.ARYHANT_TURSO_DATABASE_URL == "libsql://primary.turso.io"
+    assert s.ARYHANT_TURSO_AUTH_TOKEN == "token-primary"
+    assert s.ARYHANT_REDIS_URL == "redis://primary:6379"
     assert s.question_generator_model == "gemini-flash-lite-latest"
     assert "TURSO_DATABASE_URL" not in Settings.model_fields
     assert "TURSO_AUTH_TOKEN" not in Settings.model_fields
@@ -326,9 +326,9 @@ def test_settings_aryhant_env_resolution():
         ARYHANT_TURSO_AUTH_TOKEN="",
         ARYHANT_REDIS_URL="",
     )
-    assert s_empty.turso_database_url == ""
-    assert s_empty.turso_auth_token == ""
-    assert s_empty.redis_url == ""
+    assert s_empty.ARYHANT_TURSO_DATABASE_URL == ""
+    assert s_empty.ARYHANT_TURSO_AUTH_TOKEN == ""
+    assert s_empty.ARYHANT_REDIS_URL == ""
 
 
 def test_slack_profile_sync_deduplication():

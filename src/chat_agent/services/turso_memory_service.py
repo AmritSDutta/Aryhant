@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import sqlite3
 import threading
@@ -67,71 +68,71 @@ class TursoMemoryService:
     def __init__(
         self,
         db_path: str | None = None,
-        sync_url: str | None = None,
+        database_url: str | None = None,
         auth_token: str | None = None,
+        sync_url: str | None = None,
     ) -> None:
         self.db_path: str = db_path if db_path is not None else str(settings.resolved_turso_db_path)
-        self.sync_url: str = sync_url if sync_url is not None else settings.turso_database_url
-        self.auth_token: str = auth_token if auth_token is not None else settings.turso_auth_token
+        raw_url = (
+            database_url
+            if database_url is not None
+            else (
+                sync_url
+                if sync_url is not None
+                else (os.getenv("ARYHANT_TURSO_DATABASE_URL") or settings.ARYHANT_TURSO_DATABASE_URL)
+            )
+        )
+        url = (raw_url or "").strip().strip("'").strip('"')
+        if url.startswith("turso://"):
+            url = f"libsql://{url[len('turso://'):]}"
+        elif url and not (url.startswith("libsql://") or url.startswith("https://") or url.startswith("http://")):
+            url = f"libsql://{url}"
+        self.database_url: str = url
+        self.sync_url: str = self.database_url
+        raw_token = (
+            auth_token
+            if auth_token is not None
+            else (os.getenv("ARYHANT_TURSO_AUTH_TOKEN") or settings.ARYHANT_TURSO_AUTH_TOKEN)
+        )
+        self.auth_token: str = (raw_token or "").strip().strip("'").strip('"')
         self._write_lock = threading.Lock()
+        db_label = f"{self.database_url[:30]}..." if self.database_url else "NONE (local test SQLite)"
+        logger.info("TursoMemoryService initialized: database_url=%s, db_path=%s", db_label, self.db_path)
 
-    def _sync_remote(self, conn: Any, stage: str = "write") -> None:
-        """Synchronize local embedded replica with remote Turso database."""
-        if hasattr(conn, "sync") and self.sync_url:
-            try:
-                conn.sync()
-                logger.info("Turso remote sync (%s) completed successfully.", stage)
-            except Exception as sync_err:
-                logger.warning("Turso remote sync (%s) warning: %s.", stage, sync_err)
+    def _sync_remote(self, conn: Any = None, stage: str = "write") -> None:
+        """No-op retained for backwards interface compatibility."""
+        pass
 
     def _get_connection(self, sync_on_read: bool = False) -> Any:
-        """Obtain a database connection with embedded replica sync or fail loud if misconfigured."""
-        if self.sync_url and (
-            self.sync_url.startswith("libsql://")
-            or self.sync_url.startswith("https://")
-            or self.sync_url.startswith("http://")
-        ):
+        """Connect directly to remote Turso database using ARYHANT_TURSO_DATABASE_URL, or local SQLite for tests."""
+        if self.database_url:
             try:
                 import libsql
             except ImportError as err:
-                logger.critical("ARYHANT_TURSO_DATABASE_URL is set (%s), but 'libsql' is not installed.", self.sync_url)
+                logger.critical("ARYHANT_TURSO_DATABASE_URL is set (%s), but 'libsql' is not installed.", self.database_url)
                 raise RuntimeError(
                     "ARYHANT_TURSO_DATABASE_URL is set but 'libsql' package is not installed. "
                     "Install it with `pip install libsql`."
                 ) from err
 
+            conn = libsql.connect(
+                self.database_url,
+                auth_token=self.auth_token,
+                isolation_level=None,
+            )
             try:
-                conn = libsql.connect(
-                    self.db_path,
-                    sync_url=self.sync_url,
-                    auth_token=self.auth_token,
-                    isolation_level=None,
-                )
-                try:
-                    conn.execute("PRAGMA foreign_keys = ON;")
-                except Exception:
-                    pass
-                if sync_on_read:
-                    self._sync_remote(conn, stage="read")
-                return conn
-            except Exception as exc:
-                logger.warning(
-                    "Turso remote connection error (%s): %s. Falling back to local embedded replica.",
-                    self.sync_url,
-                    exc,
-                )
-                conn = sqlite3.connect(self.db_path, isolation_level=None)
-                try:
-                    conn.execute("PRAGMA foreign_keys = ON;")
-                except Exception:
-                    pass
-                return conn
+                conn.execute("PRAGMA foreign_keys = ON;")
+                logger.info("Connected directly to remote Turso database (%s)", self.database_url[:24])
+            except Exception as e:
+                logger.warning("Failed to enable foreign keys on remote Turso: %s", e)
+            return conn
 
         conn = sqlite3.connect(self.db_path, isolation_level=None)
         try:
             conn.execute("PRAGMA foreign_keys = ON;")
-        except Exception:
-            pass
+            logger.info("Enabled foreign keys on local SQLite connection (test mode).")
+        except Exception as e:
+            logger.warning("Failed to enable foreign keys on local SQLite connection: %s", e)
         return conn
 
     def _ensure_user_profile(
@@ -173,12 +174,13 @@ class TursoMemoryService:
                 self._ensure_user_profile(cursor, user_id, display_name, real_name)
                 conn.commit()
                 self._sync_remote(conn, stage="post-write")
-            except Exception as exc:
+                logger.info("User profile successfully updated and synced for %s (%s / %s)", user_id, display_name, real_name)
+            except Exception as e:
+                logger.warning("Error updating user profile for %s: %s", user_id, e)
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
-                logger.error("Error updating user profile for %s: %s", user_id, exc)
+                except Exception as e_rb:
+                    logger.warning("Rollback error during update_user_profile for %s: %s", user_id, e_rb)
             finally:
                 conn.close()
 
@@ -196,8 +198,8 @@ class TursoMemoryService:
         default_context = "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
         try:
             conn = self._get_connection(sync_on_read=False)
-        except Exception as exc:
-            logger.warning("Failed to obtain DB connection for %s memory context: %s", user_id, exc)
+        except Exception as e:
+            logger.warning("Failed to obtain DB connection for %s memory context: %s", user_id, e)
             return default_context
 
         try:
@@ -221,14 +223,14 @@ class TursoMemoryService:
                 label = "Skill" if kind == "skill" or weight >= SKILL_PROMOTION_THRESHOLD else kind.capitalize()
                 bullets.append(f"- [{label}] {text}")
             return "\n".join(bullets)
-        except Exception as exc:
-            logger.warning("Error fetching memory context for %s: %s", user_id, exc)
+        except Exception as e:
+            logger.warning("Error fetching memory context for %s: %s", user_id, e)
             return default_context
         finally:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Error closing DB connection for %s memory context: %s", user_id, e)
 
     async def aget_user_memory_context(self, user_id: str, limit: int = MAX_MEMORY_CONTEXT_ITEMS) -> str:
         """Async non-blocking version of get_user_memory_context."""
@@ -274,12 +276,12 @@ class TursoMemoryService:
                 self._sync_remote(conn, stage="post-write")
                 logger.info("Added manual preference for %s: %s", user_id, sanitized)
                 return memory_id
-            except Exception as exc:
+            except Exception as e:
+                logger.warning("Failed to add manual preference for %s: %s", user_id, e)
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
-                logger.error("Failed to add manual preference for %s: %s", user_id, exc)
+                except Exception as e_rb:
+                    logger.warning("Rollback error during add_manual_preference for %s: %s", user_id, e_rb)
                 return ""
             finally:
                 conn.close()
@@ -335,7 +337,8 @@ class TursoMemoryService:
                 for mem_id, _, kw_json, weight, kind in existing:
                     try:
                         kws = set(json.loads(kw_json))
-                    except Exception:
+                    except Exception as e:
+                        logger.warning("Failed to parse keywords JSON for memory %s: %s", mem_id, e)
                         kws = set()
                     overlap = len(new_keywords.intersection(kws))
                     if overlap > best_overlap:
@@ -377,12 +380,13 @@ class TursoMemoryService:
 
                 conn.commit()
                 self._sync_remote(conn, stage="post-write")
-            except Exception as exc:
+                logger.info("Pattern memory successfully committed and synced for %s: %s", user_id, sanitized)
+            except Exception as e:
+                logger.warning("Error in remember_pattern for %s: %s", user_id, e)
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
-                logger.error("Error in remember_pattern for %s: %s", user_id, exc)
+                except Exception as e_rb:
+                    logger.warning("Rollback error during remember_pattern for %s: %s", user_id, e_rb)
             finally:
                 conn.close()
 
@@ -428,8 +432,8 @@ class TursoMemoryService:
                     "is_skill": r[1] == "skill" or r[4] >= SKILL_PROMOTION_THRESHOLD,
                 })
             return results
-        except Exception as exc:
-            logger.error("Error listing memories for %s: %s", user_id, exc)
+        except Exception as e:
+            logger.warning("Error listing memories for %s: %s", user_id, e)
             return []
         finally:
             conn.close()
@@ -452,12 +456,12 @@ class TursoMemoryService:
                 self._sync_remote(conn, stage="post-write")
                 logger.info("Deleted memory %s for %s: success=%s", memory_id, user_id, deleted)
                 return deleted
-            except Exception as exc:
+            except Exception as e:
+                logger.warning("Error deleting memory %s for %s: %s", memory_id, user_id, e)
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
-                logger.error("Error deleting memory %s for %s: %s", memory_id, user_id, exc)
+                except Exception as e_rb:
+                    logger.warning("Rollback error during delete_memory for %s: %s", user_id, e_rb)
                 return False
             finally:
                 conn.close()
@@ -480,12 +484,12 @@ class TursoMemoryService:
                 self._sync_remote(conn, stage="post-write")
                 logger.info("Cleared %d memories for user %s", count, user_id)
                 return count
-            except Exception as exc:
+            except Exception as e:
+                logger.warning("Error clearing memories for %s: %s", user_id, e)
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
-                logger.error("Error clearing memories for %s: %s", user_id, exc)
+                except Exception as e_rb:
+                    logger.warning("Rollback error during clear_user_memories for %s: %s", user_id, e_rb)
                 return 0
             finally:
                 conn.close()
@@ -522,26 +526,39 @@ class TursoMemoryService:
 
         try:
             extracted: dict[str, str] | None = None
-            if provider == "nebius" and getattr(settings, "NEBIUS_API_KEY", ""):
+            if provider == "nebius" and bool(settings.nebius_api_key):
                 import openai
                 client = openai.AsyncOpenAI(
                     base_url=getattr(settings, "NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1"),
                     api_key=settings.nebius_api_key,
                 )
-                resp = await client.chat.completions.create(
-                    model=getattr(settings, "NEBIUS_QUESTION_MODEL", "nvidia/Nemotron-3-Nano-30B-A3B"),
-                    messages=[{"role": "user", "content": distill_prompt}],
-                    temperature=0.2,
-                    max_tokens=256,
-                    response_format={"type": "json_object"},
-                )
+                nebius_model = getattr(settings, "nebius_question_model", "") or getattr(settings, "NEBIUS_QUESTION_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+                try:
+                    resp = await client.chat.completions.create(
+                        model=nebius_model,
+                        messages=[{"role": "user", "content": distill_prompt}],
+                        temperature=0.2,
+                        max_tokens=256,
+                        response_format={"type": "json_object"},
+                    )
+                except Exception as e_rf:
+                    logger.warning("Nebius json_object response_format failed (%s), retrying standard completion: %s", nebius_model, e_rf)
+                    resp = await client.chat.completions.create(
+                        model=nebius_model,
+                        messages=[{"role": "user", "content": distill_prompt}],
+                        temperature=0.2,
+                        max_tokens=256,
+                    )
                 content = resp.choices[0].message.content or ""
                 try:
                     extracted = json.loads(content)
-                except Exception:
+                    logger.info("Parsed Nebius JSON distillation response: %s", extracted)
+                except Exception as e:
+                    logger.warning("Direct JSON decode failed for Nebius response (%s), trying regex: %s", content[:80], e)
                     match = re.search(r"\{.*?\}", content, re.DOTALL)
                     if match:
                         extracted = json.loads(match.group(0))
+                        logger.info("Regex fallback successfully decoded Nebius JSON: %s", extracted)
             else:
                 from google import genai
                 from google.genai import types
@@ -563,10 +580,13 @@ class TursoMemoryService:
                 text_out = resp.text or ""
                 try:
                     extracted = json.loads(text_out)
-                except Exception:
+                    logger.info("Parsed Gemini JSON distillation response: %s", extracted)
+                except Exception as e:
+                    logger.warning("Direct JSON decode failed for Gemini response (%s), trying regex: %s", text_out[:80], e)
                     match = re.search(r"\{.*?\}", text_out, re.DOTALL)
                     if match:
                         extracted = json.loads(match.group(0))
+                        logger.info("Regex fallback successfully decoded Gemini JSON: %s", extracted)
 
             if extracted and isinstance(extracted, dict) and extracted.get("statement"):
                 stmt = str(extracted["statement"]).strip()
@@ -579,8 +599,9 @@ class TursoMemoryService:
                         display_name=display_name,
                         real_name=real_name,
                     )
-        except Exception as exc:
-            logger.warning("Background memory extraction notice for %s: %s", user_id, exc)
+                    logger.info("Successfully extracted and recorded memory pattern for %s: %s (category=%s)", user_id, stmt, cat)
+        except Exception as e:
+            logger.warning("Background memory extraction notice for %s: %s", user_id, e)
 
 
 _turso_service_instance: TursoMemoryService | None = None

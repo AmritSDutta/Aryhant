@@ -4,6 +4,7 @@ from __future__ import annotations
 import collections
 import json
 import logging
+import os
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -59,7 +60,8 @@ class RedisSessionStore:
     """Manages multi-turn conversation thread histories in Redis with a 20-turn sliding window."""
 
     def __init__(self, redis_url: str | None = None, ttl_sec: int | None = None) -> None:
-        self.redis_url: str = redis_url if redis_url is not None else settings.redis_url
+        raw_redis = redis_url if redis_url is not None else (os.getenv("ARYHANT_REDIS_URL") or settings.ARYHANT_REDIS_URL)
+        self.redis_url: str = (raw_redis or "").strip().strip("'").strip('"')
         self.ttl_sec: int = ttl_sec or getattr(settings, "REDIS_TTL_SEC", 86400)
         self._client: aioredis.Redis | None = None
 

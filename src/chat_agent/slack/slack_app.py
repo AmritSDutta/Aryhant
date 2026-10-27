@@ -10,16 +10,22 @@ from chat_agent.config import settings, slack_ready
 logger = logging.getLogger(__name__)
 
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
-_USER_NAMES_CACHE: dict[str, tuple[str, str]] = {}
-_SYNCED_USER_PROFILES: set[tuple[str, str, str]] = set()
+_USER_PROFILE_CACHE: dict[str, tuple[str, str, str]] = {}
+_SYNCED_USER_PROFILES: set[tuple[str, str, str, str]] = set()
+
+POLITE_DENIAL_MESSAGE = (
+    "Hello! Access to this assistant is restricted to authorized users. "
+    "Your email address is not on the permitted list. "
+    "Please contact your workspace administrator if you need access."
+)
 
 
-async def _resolve_user_names(client: Any, user_id: str) -> tuple[str, str]:
-    """Resolve display and real name for a Slack user with memory caching."""
+async def _resolve_user_profile_info(client: Any, user_id: str) -> tuple[str, str, str]:
+    """Resolve display name, real name, and email for a Slack user with memory caching."""
     if not user_id or user_id == "slack-user":
-        return ("Aryhant Student", "Student")
-    if user_id in _USER_NAMES_CACHE:
-        return _USER_NAMES_CACHE[user_id]
+        return ("Aryhant Student", "Student", "")
+    if user_id in _USER_PROFILE_CACHE:
+        return _USER_PROFILE_CACHE[user_id]
     try:
         resp = await client.users_info(user=user_id)
         if resp.get("ok"):
@@ -27,12 +33,20 @@ async def _resolve_user_names(client: Any, user_id: str) -> tuple[str, str]:
             prof = u.get("profile") or {}
             real = prof.get("real_name") or u.get("real_name") or "Student"
             display = prof.get("display_name") or u.get("name") or real
-            names = (display, real)
-            _USER_NAMES_CACHE[user_id] = names
-            return names
+            email = (prof.get("email") or "").strip().lower()
+            info = (display, real, email)
+            _USER_PROFILE_CACHE[user_id] = info
+            logger.info("Resolved Slack user %s profile: display=%r, real=%r, email=%r", user_id, display, real, email)
+            return info
     except Exception as exc:
         logger.debug("Slack users_info lookup notice for %s: %s", user_id, exc)
-    return ("Aryhant Student", "Student")
+    return ("Aryhant Student", "Student", "")
+
+
+async def _resolve_user_names(client: Any, user_id: str) -> tuple[str, str]:
+    """Resolve display and real name for a Slack user with memory caching."""
+    d_name, r_name, _ = await _resolve_user_profile_info(client, user_id)
+    return (d_name, r_name)
 
 
 def build_slack_app() -> Any:
@@ -50,9 +64,14 @@ def build_slack_app() -> Any:
 def _register_handlers(app: Any) -> None:
     @app.command("/preferences")
     async def on_preferences_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        user_id = body.get("user_id") or "slack-user"
+        _, _, email = await _resolve_user_profile_info(client, user_id)
+        if not settings.is_email_allowed(email):
+            logger.warning("Access denied for command /preferences from user %s (email: %r)", user_id, email)
+            await ack(POLITE_DENIAL_MESSAGE)
+            return
         await ack()
         trigger_id = body.get("trigger_id")
-        user_id = body.get("user_id") or "slack-user"
         if trigger_id:
             from chat_agent.services.turso_memory_service import get_turso_memory_service
             from chat_agent.slack.preferences_modal import build_preferences_modal
@@ -130,12 +149,26 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
 
     user_id_key = f"slack:{user}"
     turso_svc = get_turso_memory_service()
-    d_name, r_name = await _resolve_user_names(app.client, user)
-    user_sig = (user_id_key, d_name, r_name)
+    d_name, r_name, email = await _resolve_user_profile_info(app.client, user)
+    logger.info("Resolved caller for %s: display=%r, email=%r (allowed=%s)", user_id_key, d_name, email, settings.is_email_allowed(email))
+    if not settings.is_email_allowed(email):
+        logger.warning(
+            "Access denied for Slack user %s (email: %r). Not in ARYHANT_ALLOWED_EMAILS.",
+            user,
+            email,
+        )
+        await app.client.chat_postMessage(
+            channel=channel,
+            text=POLITE_DENIAL_MESSAGE,
+            thread_ts=thread_ts or msg_ts,
+        )
+        return
+
+    user_sig = (user_id_key, d_name, r_name, email)
     if user_sig not in _SYNCED_USER_PROFILES:
         async def _sync_profile_task() -> None:
             try:
-                await turso_svc.aupdate_user_profile(user_id_key, display_name=d_name, real_name=r_name)
+                await turso_svc.aupdate_user_profile(user_id_key, display_name=d_name, real_name=r_name, email=email)
                 _SYNCED_USER_PROFILES.add(user_sig)
                 logger.info("User profile synced and registered in _SYNCED_USER_PROFILES: %s", user_sig)
             except Exception as e:

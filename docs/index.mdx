@@ -84,6 +84,9 @@ flowchart LR
 - **Private Redis Session Store**: Persists multi-turn conversation thread histories in private Upstash Redis with a strict 20-turn sliding window (`LTRIM`) and 24-hour TTL (`REDIS_TTL_SEC`), with seamless in-memory fallback.
 - **Turso Personal Memory & Preferences Engine**: Stores structured, PII-free student preferences, habits, and learned skills with multi-script tokenization (English, Hindi, Bengali), keyword overlap reinforcement, and automatic promotion to `'skill'` at `weight >= 3`.
 - **Interactive Slack Preferences Modal (`/preferences`)**: Provides student data sovereignty via a private Block Kit popup modal with real-time deletion and clear-all actions.
+- **Deterministic Email Access Control (`ARYHANT_ALLOWED_EMAILS`)**: Enforces workspace user authorization via `client.users_info` email resolution. Unauthorized callers receive an immediate, deterministic polite denial, bypassing LLM runner execution and protecting quota.
+- **Direct Turso libSQL Memory Service**: Direct connection to remote Turso databases (`ARYHANT_TURSO_DATABASE_URL`), storing learning preferences and student emails across turns without local replica synchronization.
+- **Strict Redis Key Isolation**: Thread session keys strictly prefixed with `aryhant:` (`format_session_key`) for multi-tenant Upstash Redis isolation.
 
 ## Codebase Structure
 

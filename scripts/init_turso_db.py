@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     user_id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
     real_name TEXT NOT NULL,
+    email TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

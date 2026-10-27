@@ -285,3 +285,96 @@ async def test_socket_mode_decoupled():
         await start_slack()
         mock_socket_handler.AsyncSocketModeHandler.assert_called_once()
         mock_socket_handler.AsyncSocketModeHandler.return_value.start_async.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_slack_handle_event_deterministic_denial():
+    """Verify unauthorized email gets deterministic polite denial without calling run_agent."""
+    from chat_agent.slack.slack_app import _handle_event, POLITE_DENIAL_MESSAGE, _USER_PROFILE_CACHE
+
+    _USER_PROFILE_CACHE.clear()
+    mock_app = MagicMock()
+    mock_app.client = AsyncMock()
+    mock_app.client.users_info.return_value = {
+        "ok": True,
+        "user": {
+            "profile": {
+                "display_name": "Intruder User",
+                "real_name": "Intruder Real",
+                "email": "unauthorized@example.com",
+            }
+        },
+    }
+
+    event = {
+        "channel": "C_TEST_DENIAL",
+        "user": "U_UNAUTH",
+        "text": "What is the capital of France?",
+        "ts": "12345.67",
+    }
+
+    with patch("chat_agent.slack.slack_app.settings") as mock_settings, patch(
+        "chat_agent.slack.slack_app.run_agent", new_callable=AsyncMock
+    ) as mock_run_agent:
+        mock_settings.allowed_emails_list = ["student@school.org"]
+        mock_settings.is_email_allowed.return_value = False
+
+        await _handle_event(mock_app, event)
+
+        mock_run_agent.assert_not_called()
+        mock_app.client.chat_postMessage.assert_awaited_once_with(
+            channel="C_TEST_DENIAL",
+            text=POLITE_DENIAL_MESSAGE,
+            thread_ts="12345.67",
+        )
+
+
+@pytest.mark.asyncio
+async def test_slack_handle_event_allowed_email():
+    """Verify authorized email proceeds to run_agent and posts agent output."""
+    from chat_agent.slack.slack_app import _handle_event, _USER_PROFILE_CACHE
+
+    _USER_PROFILE_CACHE.clear()
+    mock_app = MagicMock()
+    mock_app.client = AsyncMock()
+    mock_app.client.users_info.return_value = {
+        "ok": True,
+        "user": {
+            "profile": {
+                "display_name": "Authorized Student",
+                "real_name": "Student Real",
+                "email": "student@school.org",
+            }
+        },
+    }
+
+    event = {
+        "channel": "C_TEST_ALLOWED",
+        "user": "U_AUTH",
+        "text": "Explain photosynthesis",
+        "ts": "23456.78",
+    }
+
+    with patch("chat_agent.slack.slack_app.settings") as mock_settings, patch(
+        "chat_agent.slack.slack_app.run_agent", new_callable=AsyncMock
+    ) as mock_run_agent, patch(
+        "chat_agent.services.turso_memory_service.get_turso_memory_service"
+    ) as mock_get_turso:
+        mock_settings.allowed_emails_list = ["student@school.org"]
+        mock_settings.is_email_allowed.return_value = True
+        mock_settings.MULTIMODAL_ENABLED = False
+        mock_run_agent.return_value = "Photosynthesis is the process..."
+
+        mock_turso = AsyncMock()
+        mock_turso.aget_user_memory_context.return_value = "Memory context"
+        mock_turso.aupdate_user_profile = AsyncMock()
+        mock_turso.extract_and_reinforce = AsyncMock()
+        mock_get_turso.return_value = mock_turso
+
+        await _handle_event(mock_app, event)
+
+        mock_run_agent.assert_awaited_once()
+        mock_app.client.chat_postMessage.assert_awaited_once()
+        call_kwargs = mock_app.client.chat_postMessage.call_args[1]
+        assert call_kwargs["channel"] == "C_TEST_ALLOWED"
+        assert "Photosynthesis" in call_kwargs["text"]

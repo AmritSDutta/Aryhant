@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     user_id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
     real_name TEXT NOT NULL,
+    email TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -101,6 +102,49 @@ Students and teachers have complete transparency and data sovereignty over what 
 - **Learned Skills Badges**: Displays high-confidence mastered topics at the top.
 - **Interactive Deletion**: Each preference has an individual `Delete` button accessory (`action_id="delete_memory_action"`). Clicking it deletes the record from Turso and immediately refreshes the modal in real time via `client.views_update`.
 - **Clear All Preferences**: A danger-styled button with a confirmation popup allowing users to exercise their right to be forgotten.
+
+## Manual Testing in Slack
+
+You can verify and test student preferences end-to-end directly in Slack via the interactive modal or natural conversational distillation.
+
+### Method 1: The Interactive `/preferences` Modal
+
+1. **Prerequisite (Slack Slash Command Registration)**:
+   - Navigate to [api.slack.com/apps](https://api.slack.com/apps) $\rightarrow$ Your App $\rightarrow$ **Slash Commands**.
+   - Ensure `/preferences` is configured:
+     - **Command**: `/preferences`
+     - **Short Description**: `View and manage personal learning preferences`
+     - **Usage Hint**: `(opens modal)`
+2. **Open the Modal**:
+   - In Slack, type `/preferences` in any direct message or channel with the bot and press Enter.
+   - A private Block Kit modal opens displaying:
+     - 🏆 **Learned Skills & Mastered Topics**: Badged competencies that reached confidence weight $\ge 3$.
+     - 📌 **Active Preferences & Habits**: List of individual habits with per-item **Delete** buttons.
+     - 🗑️ **Clear All Memories**: Dangerous action with confirmation dialog to purge all records.
+3. **Test Deletion & Clear**:
+   - Click **Delete** next to any preference item or click **Clear All Memories**.
+   - The modal automatically refreshes in real time via `client.views_update` without posting to the channel.
+
+### Method 2: Natural Language Distillation & Reinforcement
+
+1. **Teach a Habit via Direct Message**:
+   Send a message expressing an explicit pedagogical style or habit:
+   > *"I learn best when you provide step-by-step hints and analogies before giving the final answer."*
+2. **Observe Terminal Logs**:
+   In your terminal running `python -m chat_agent.main slack`, the background distiller extracts and records the habit without adding latency to the student's Slack response:
+   ```text
+   INFO | turso_memory_service.extract_and_reinforce | Successfully extracted and recorded memory pattern for slack:U...: 'Prefers step-by-step hints and analogies' (category=Tone)
+   ```
+3. **Verify Context Injection in Subsequent Turns**:
+   In a new message, ask an academic question:
+   > *"How do I find the area of a triangle?"*
+   - Observe in the terminal logs that `user_memory_context` is retrieved and injected into the prompt:
+     ```text
+     INFO | turso_memory_service.get_user_memory_context | Fetching user memory context for slack:U...
+     ```
+   - Aryhant's reply will structure the explanation with guiding hints and analogies according to your stored preference before providing final values.
+4. **Confirm in Modal**:
+   Type `/preferences` again to see your newly distilled preference listed under **Active Preferences & Habits**.
 
 ## Database Migrations
 

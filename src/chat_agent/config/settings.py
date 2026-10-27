@@ -120,6 +120,7 @@ class Settings(BaseSettings):
     AUTH0_DOMAIN: str = ""
     AUTH0_AUDIENCE: str = ""
     LOG_USER_INFO: bool = True
+    ARYHANT_ALLOWED_EMAILS: str = ""
 
     # Database & Telemetry
     ARYHANT_TURSO_DATABASE_URL: str = ""
@@ -239,6 +240,26 @@ class Settings(BaseSettings):
             for item in self.EMAIL_ALLOWED_SENDERS.split(",")
             if item.strip()
         ]
+
+    @property
+    def allowed_emails_list(self) -> list[str]:
+        raw = (os.getenv("ARYHANT_ALLOWED_EMAILS") or self.ARYHANT_ALLOWED_EMAILS or "").strip()
+        if not raw:
+            return []
+        return [
+            item.strip().lower()
+            for item in raw.split(",")
+            if item.strip()
+        ]
+
+    def is_email_allowed(self, email: str) -> bool:
+        """Check if an email is permitted. If ARYHANT_ALLOWED_EMAILS is empty, all emails are allowed."""
+        allowed = self.allowed_emails_list
+        if not allowed:
+            return True
+        if not email:
+            return False
+        return email.strip().lower() in allowed
 
     @property
     def llm_ready(self) -> bool:

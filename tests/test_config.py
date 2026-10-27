@@ -128,3 +128,17 @@ def test_settings_aryhant_slack_tokens():
     assert cfg.aryhant_slack_app_token == "xapp-aryhant"
     assert cfg.slack_ready is True
     assert cfg.slack_http_ready is True
+
+
+def test_settings_allowed_emails():
+    cfg_empty = Settings(ARYHANT_ALLOWED_EMAILS="")
+    assert cfg_empty.allowed_emails_list == []
+    assert cfg_empty.is_email_allowed("any@example.com") is True
+    assert cfg_empty.is_email_allowed("") is True
+
+    cfg = Settings(ARYHANT_ALLOWED_EMAILS="Student1@School.org, Student2@Domain.Com ")
+    assert cfg.allowed_emails_list == ["student1@school.org", "student2@domain.com"]
+    assert cfg.is_email_allowed("student1@school.org") is True
+    assert cfg.is_email_allowed("STUDENT2@DOMAIN.COM") is True
+    assert cfg.is_email_allowed("intruder@example.com") is False
+    assert cfg.is_email_allowed("") is False

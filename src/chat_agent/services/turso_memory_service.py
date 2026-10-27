@@ -141,21 +141,24 @@ class TursoMemoryService:
         user_id: str,
         display_name: str | None = None,
         real_name: str | None = None,
+        email: str | None = None,
     ) -> None:
         """Ensure parent row exists in user_profiles to satisfy foreign key constraint and track identity."""
         now_ms = int(time.time() * 1000)
         d_name = (display_name or "").strip() or "Aryhant Student"
         r_name = (real_name or "").strip() or "Student"
+        em = (email or "").strip().lower() or None
         cursor.execute(
             """
-            INSERT INTO user_profiles (user_id, display_name, real_name, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO user_profiles (user_id, display_name, real_name, email, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 display_name = CASE WHEN excluded.display_name != 'Aryhant Student' THEN excluded.display_name ELSE user_profiles.display_name END,
                 real_name = CASE WHEN excluded.real_name != 'Student' THEN excluded.real_name ELSE user_profiles.real_name END,
+                email = CASE WHEN excluded.email IS NOT NULL THEN excluded.email ELSE user_profiles.email END,
                 updated_at = excluded.updated_at;
             """,
-            (user_id, d_name, r_name, now_ms, now_ms),
+            (user_id, d_name, r_name, em, now_ms, now_ms),
         )
 
     def update_user_profile(
@@ -163,18 +166,19 @@ class TursoMemoryService:
         user_id: str,
         display_name: str,
         real_name: str,
+        email: str | None = None,
     ) -> None:
-        """Explicitly update user profile display name and real name with pre and post sync."""
+        """Explicitly update user profile display name, real name, and email with pre and post sync."""
         with self._write_lock:
             conn = self._get_connection(sync_on_read=False)
             try:
                 self._sync_remote(conn, stage="pre-write")
                 cursor = conn.cursor()
                 cursor.execute("BEGIN IMMEDIATE;")
-                self._ensure_user_profile(cursor, user_id, display_name, real_name)
+                self._ensure_user_profile(cursor, user_id, display_name, real_name, email)
                 conn.commit()
                 self._sync_remote(conn, stage="post-write")
-                logger.info("User profile successfully updated and synced for %s (%s / %s)", user_id, display_name, real_name)
+                logger.info("User profile successfully updated and synced for %s (%s / %s / %s)", user_id, display_name, real_name, email)
             except Exception as e:
                 logger.warning("Error updating user profile for %s: %s", user_id, e)
                 try:
@@ -189,9 +193,10 @@ class TursoMemoryService:
         user_id: str,
         display_name: str,
         real_name: str,
+        email: str | None = None,
     ) -> None:
         """Async non-blocking version of update_user_profile."""
-        await asyncio.to_thread(self.update_user_profile, user_id, display_name, real_name)
+        await asyncio.to_thread(self.update_user_profile, user_id, display_name, real_name, email)
 
     def get_user_memory_context(self, user_id: str, limit: int = MAX_MEMORY_CONTEXT_ITEMS) -> str:
         """Fetch top weighted memories for prompt injection formatted as concise markdown bullets."""
@@ -518,14 +523,14 @@ class TursoMemoryService:
             "Analyze this Grade 5 student message and AI response. "
             "Extract 1 concise pedagogical learning habit, recurring topic interest, or explanation preference if present. "
             "Never include personal names, ages, phone numbers, or private details. "
-            "If nothing noteworthy or general greeting, return null.\n"
+            'If nothing noteworthy or general greeting, return {"statement": null}.\n'
             f"Student: {user_text[:400]}\n"
             f"Assistant: {assistant_reply[:400]}\n\n"
-            'Output valid JSON only: {"statement": "...", "category": "Mathematics|Science|Language|Tone"} or null'
+            'Output a valid JSON object only: {"statement": "...", "category": "Mathematics|Science|Language|Tone"} or {"statement": null}'
         )
 
         try:
-            extracted: dict[str, str] | None = None
+            extracted: dict[str, Any] | None = None
             if provider == "nebius" and bool(settings.nebius_api_key):
                 import openai
                 client = openai.AsyncOpenAI(
@@ -538,7 +543,7 @@ class TursoMemoryService:
                         model=nebius_model,
                         messages=[{"role": "user", "content": distill_prompt}],
                         temperature=0.2,
-                        max_tokens=256,
+                        max_tokens=1024,
                         response_format={"type": "json_object"},
                     )
                 except Exception as e_rf:
@@ -547,9 +552,20 @@ class TursoMemoryService:
                         model=nebius_model,
                         messages=[{"role": "user", "content": distill_prompt}],
                         temperature=0.2,
-                        max_tokens=256,
+                        max_tokens=1024,
                     )
-                content = resp.choices[0].message.content or ""
+                msg = resp.choices[0].message
+                content = (msg.content or "").strip()
+                if not content:
+                    reasoning = getattr(msg, "reasoning_content", "") or ""
+                    match_r = re.search(r"\{.*?\}", reasoning, re.DOTALL)
+                    if match_r:
+                        content = match_r.group(0)
+
+                if not content or content.lower() in ("null", "none", "{}", "nil"):
+                    logger.debug("Nebius distillation returned empty or null; no memory pattern to extract.")
+                    return
+
                 try:
                     extracted = json.loads(content)
                     logger.info("Parsed Nebius JSON distillation response: %s", extracted)
@@ -577,7 +593,11 @@ class TursoMemoryService:
                         temperature=0.2,
                     ),
                 )
-                text_out = resp.text or ""
+                text_out = (resp.text or "").strip()
+                if not text_out or text_out.lower() in ("null", "none", "{}", "nil"):
+                    logger.debug("Gemini distillation returned empty or null; no memory pattern to extract.")
+                    return
+
                 try:
                     extracted = json.loads(text_out)
                     logger.info("Parsed Gemini JSON distillation response: %s", extracted)
@@ -591,7 +611,7 @@ class TursoMemoryService:
             if extracted and isinstance(extracted, dict) and extracted.get("statement"):
                 stmt = str(extracted["statement"]).strip()
                 cat = str(extracted.get("category", "General")).strip()
-                if stmt and stmt.lower() != "null":
+                if stmt and stmt.lower() not in ("null", "none", "nil", "false"):
                     await self.aremember_pattern(
                         user_id=user_id,
                         text=stmt,

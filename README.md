@@ -16,11 +16,12 @@ A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email,
 | Procedural Diagrams | Dynamic math and science diagram generator (parabolas, waves, geometric figures, circuits, biological structures) |
 | Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with size budgets and prior-turn binary attachment pruning |
 | Multi-Provider Web Search | Weighted random search pool across DuckDuckGo, Exa, Firecrawl, Tavily, and Serper with GPT summarization for large contexts |
-| Slack Locally | Native Slack Bolt Socket Mode with `AsyncSocketModeHandler` |
+| Slack Locally | Native Slack Bolt Socket Mode with `AsyncSocketModeHandler` and `ARYHANT_ALLOWED_EMAILS` deterministic authorization |
 | Slack Over HTTP | Event filtering, threaded replies, and scale-to-zero proxying via Cloudflare Worker and Upstash QStash |
 | REST API | FastAPI `/api/chat` (Auth0 protected when `REQUIRE_AUTH=true`, 5/min rate limit), `/api/health`, `/webhooks/slack` |
 | Email | IMAP unread-message polling and SMTP replies |
-| Conversation State | In-memory bounded session history (`_HISTORY` cap 20) with binary pruning |
+| Conversation State (Tier 1) | Private Upstash Redis with strict `aryhant:` prefix enforcement, 20-turn sliding window (`LTRIM`), and 24-hour TTL |
+| Personal Memory & Skills (Tier 2) | Remote Turso (libSQL) long-term memory engine with multi-script tokenization (English, Hindi, Bengali), user email persistence, and interactive `/preferences` Slack modal |
 
 ## Recommended cloud architecture
 
@@ -121,10 +122,12 @@ python -m chat_agent.main chat --message "Give me 5 practice questions on plant 
 Create an app at <https://api.slack.com/apps>:
 
 - Enable Socket Mode.
-- Add Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:history`, `files:write`.
+- Add Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:history`, `files:write`, `users:read.email`.
 - Subscribe to `app_mention` and `message.im` bot events.
 - Create an app-level token with `connections:write`.
 - Install the app and set `ARYHANT_SLACK_BOT_TOKEN` and `ARYHANT_SLACK_APP_TOKEN` in `.env`.
+- (Optional) Set `ARYHANT_ALLOWED_EMAILS` (comma-separated list of permitted emails) to enforce access control.
+- (Optional) Set `ARYHANT_TURSO_DATABASE_URL`, `ARYHANT_TURSO_AUTH_TOKEN`, and `ARYHANT_REDIS_URL` for durable long-term memory and session persistence.
 
 ```bash
 python -m chat_agent.main slack
@@ -158,6 +161,8 @@ tests/                   pytest hermetic test suite
 | Math formatter (plain-text ICSE math) | [Math Formatter](src/chat_agent/utils/math_formatter.py) |
 | Multimodal attachments & moderation | [Multimodal](src/chat_agent/utils/multimodal.py) |
 | Environment configuration | [Config](src/chat_agent/config/settings.py) |
+| Upstash Redis session store (`aryhant:` prefix) | [Redis Store](src/chat_agent/services/redis_session_store.py) |
+| Turso libSQL personal memory & skills engine | [Turso Memory](src/chat_agent/services/turso_memory_service.py) |
 | Local CLI | [Main](src/chat_agent/main.py) |
 | Slack Socket Mode (Slack Bolt) / HTTP | [Socket integration](src/chat_agent/slack/slack_app.py), [HTTP handler](src/chat_agent/slack/slack_http.py) |
 | Slack Block Kit generator | [Post generator](src/chat_agent/slack/post_generator.py) |

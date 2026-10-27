@@ -17,7 +17,7 @@ python -m chat_agent.main slack
 
 - **Outbound WebSocket**: No public IP or tunneling software (e.g., ngrok) is required.
 - **Required Tokens**: `ARYHANT_SLACK_BOT_TOKEN` (`xoxb-...`) and `ARYHANT_SLACK_APP_TOKEN` (`xapp-...`).
-- **Prerequisites**: Socket Mode enabled in the Slack console, bot events `app_mention` and `message.im` subscribed, and bot scopes (`app_mentions:read`, `chat:write`, `im:history`, `files:write`) granted.
+- **Prerequisites**: Socket Mode enabled in the Slack console, bot events `app_mention` and `message.im` subscribed, and bot scopes (`app_mentions:read`, `chat:write`, `im:history`, `files:write`, `users:read.email`) granted.
 
 ### Quick Start: 1-Click Manifest Setup
 
@@ -134,4 +134,18 @@ Students and teachers can inspect and manage what Aryhant remembers about their 
 - **Clear All Preferences**: A danger-styled button with a confirmation popup allows students to exercise their right to be forgotten.
 - **Background Learning**: In the background after message replies, Aryhant distills learning habits and updates the Turso memory store without adding latency to the student's Slack response.
 
-See [Turso memory and preferences](/turso-memory-preferences) for complete architecture and schema details.
+See [Turso memory and preferences](/turso-memory-preferences) for complete architecture, schema details, and manual Slack testing guides.
+
+## 7. Access Control & User Email Whitelist (`ARYHANT_ALLOWED_EMAILS`)
+
+To restrict who can interact with the Slack bot and prevent unauthorized token consumption:
+
+- **Environment Variable**: `ARYHANT_ALLOWED_EMAILS` (comma-separated list of permitted email addresses, case-insensitive).
+  ```bash
+  ARYHANT_ALLOWED_EMAILS="student1@school.org, student2@domain.com, teacher@school.org"
+  ```
+- **Prerequisite Scope**: The Slack Bot token must have the **`users:read.email`** Bot Token Scope. Without this scope, Slack omits email addresses from user profile lookups.
+- **Deterministic Polite Denial**: When an unauthorized user sends a message or invokes `/preferences`, the bot detects that their email is not on the whitelist and immediately replies with a polite deterministic notice:
+  > *"Hello! Access to this assistant is restricted to authorized users. Your email address is not on the permitted list. Please contact your workspace administrator if you need access."*
+  The LLM runner (`run_agent`) and Turso memory queries are completely skipped, saving API costs and tokens.
+- **Open Access Mode**: If `ARYHANT_ALLOWED_EMAILS` is empty or unset (`""`), email filtering is inactive (open access mode).

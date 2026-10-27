@@ -335,11 +335,33 @@ def test_slack_profile_sync_deduplication():
     """Verify that identical user profile signatures are deduplicated to eliminate write amplification."""
     from chat_agent.slack.slack_app import _SYNCED_USER_PROFILES
 
-    sig = ("slack:U_DEDUP_TEST", "Aryhant Student", "Student")
+    sig = ("slack:U_DEDUP_TEST", "Aryhant Student", "Student", "student@example.com")
     _SYNCED_USER_PROFILES.discard(sig)
 
     assert sig not in _SYNCED_USER_PROFILES
     _SYNCED_USER_PROFILES.add(sig)
     assert sig in _SYNCED_USER_PROFILES
+
+
+def test_user_profile_email_persistence(memory_service: TursoMemoryService):
+    """Verify that email is persisted into user_profiles table."""
+    user_id = "slack:U_EMAIL_TEST"
+    memory_service.update_user_profile(
+        user_id=user_id,
+        display_name="Test Student",
+        real_name="Student Real",
+        email="student@school.org",
+    )
+
+    conn = sqlite3.connect(memory_service.db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT display_name, real_name, email FROM user_profiles WHERE user_id = ?;", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    assert row is not None
+    assert row[0] == "Test Student"
+    assert row[1] == "Student Real"
+    assert row[2] == "student@school.org"
 
 

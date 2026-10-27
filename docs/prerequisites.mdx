@@ -30,8 +30,12 @@ RuntimeError: Set USER_LLM_API_KEY in .env before starting the agent.
 | `NEBIUS_API_KEY` | Nebius Token Factory API key; required when `MODEL_PROVIDER=nebius` (the default) and used by the question generator |
 | `OPENAI_API_KEY` | OpenAI API key for `FALLBACK_GPT_MODEL` (`gpt-6-luna`) failover |
 | `TYPESAFE_API_KEY` | TypeSafe AI API key (optional; enables parallel System One `Noul` hint quality scoring) |
-| `ARYHANT_SLACK_BOT_TOKEN` | Bot user OAuth token (`xoxb-...`); required for posting messages and downloading attachments |
+| `ARYHANT_SLACK_BOT_TOKEN` | Bot user OAuth token (`xoxb-...`); required for posting messages, downloading attachments, and reading user profiles |
 | `ARYHANT_SLACK_APP_TOKEN` | App-level token (`xapp-...`) with `connections:write`; required for Socket Mode |
+| `ARYHANT_ALLOWED_EMAILS` | Comma-separated allowlist of permitted Slack user emails (optional; if unset, open access is allowed) |
+| `ARYHANT_TURSO_DATABASE_URL` | Remote Turso libSQL database URL (`libsql://aryhant-xxx.turso.io`) for long-term student memories and preferences |
+| `ARYHANT_TURSO_AUTH_TOKEN` | Turso database authentication token |
+| `ARYHANT_REDIS_URL` | Upstash Redis connection URL (`redis://...`) for 24h conversation turn session history |
 
 `python -m chat_agent.main slack` runs in the foreground. It must stay running to process Socket Mode events.
 
@@ -68,7 +72,8 @@ The fastest and most reliable way to configure the Slack app with all required s
         "chat:write",
         "files:write",
         "im:history",
-        "files:read"
+        "files:read",
+        "users:read.email"
       ]
     }
   },
@@ -113,6 +118,7 @@ Configure the following OAuth scopes under **OAuth & Permissions**:
 | `chat:write` | Posting replies and updating message threads |
 | `im:history` | Reading direct message conversations |
 | `files:write` | Uploading compiled PDF study notes and infographics to Slack threads |
+| `users:read.email` | Resolving user emails for `ARYHANT_ALLOWED_EMAILS` authorization and Turso profiles |
 
 ### Bot Event Subscriptions
 

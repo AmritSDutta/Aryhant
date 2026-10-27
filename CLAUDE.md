@@ -71,22 +71,26 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   ├── app.py                      # FastAPI server (/api/chat, /api/health, /webhooks/*)
 │   ├── main.py                     # CLI entry point (serve, chat, slack subcommands)
 │   └── webhooks.py                 # Webhook authentication & endpoints
-├── tests/                          # Hermetic test suite with mocked external services
+├── tests/                          # Hermetic test suite with mocked external services (145 tests)
+├── .github/workflows/ci.yml        # GitHub Actions CI (ruff non-blocking, pytest blocking)
 ├── Dockerfile                      # Production container image definition
 └── pyproject.toml                  # Project metadata, dependencies, and pytest configuration
 ```
 
 ## Architecture
 
-Direct Google GenAI & OpenAI model execution engine behind every channel:
+Direct Google GenAI, Nebius & OpenAI model execution engine behind every channel:
 
-- `src/chat_agent/agents/prompt.py` — Aryhant persona: versatile daily AI companion and assistant (general inquiries, planning, writing, problem-solving, coding last) with specialized St. Xavier's Grade 5 ICSE pedagogical capabilities (plain-text math `3/5`, `cm²`, `+`, `-`, `x`, `÷`, 5–10 numbered practice questions, answer keys at end) and universal visual PDF notes generation across any topic.
-- `src/chat_agent/agents/model_runner.py` & `src/chat_agent/agents/gemini_model_runner.py` — Decoupled model execution: `ModelRunner` interface protocol with `get_model_runner()` factory dispatching to `GeminiModelRunner` (executes 3 randomized attempts across `FIRST_CHOICE_MODELS` with tool loop and `FALLBACK_GPT_MODEL` failover) or `NebiusModelRunner`. `runner.py` acts as pure orchestrator for clipping, moderation, and dispatch.
+- `src/chat_agent/agents/prompt.py` — Aryhant persona: versatile daily AI companion and assistant with specialized St. Xavier's Grade 5 ICSE pedagogical capabilities (plain-text math `3/5`, `cm²`, `+`, `-`, `x`, `÷`, 5–10 numbered practice questions, answer keys at end) and universal visual PDF notes generation across any topic.
+- `src/chat_agent/agents/model_runner.py` & `src/chat_agent/agents/gemini_model_runner.py` / `nebius_model_runner.py` — Decoupled model execution: `ModelRunner` interface protocol with `get_model_runner()` factory dispatching to `NebiusModelRunner` (default) or `GeminiModelRunner` (executes 3 randomized attempts across `FIRST_CHOICE_MODELS` with tool loop and `FALLBACK_GPT_MODEL` failover). `runner.py` acts as pure orchestrator for clipping, moderation, and dispatch.
+- `src/chat_agent/services/redis_session_store.py` — Private Upstash Redis session store: strict `aryhant:` prefix enforcement (`format_session_key`), 20-turn sliding window (`LTRIM`), and 24-hour TTL (`REDIS_TTL_SEC`) with seamless in-memory fallback.
+- `src/chat_agent/services/turso_memory_service.py` — Remote Turso libSQL memory & preferences engine: connects directly via `libsql.connect(self.database_url, auth_token=self.auth_token)`. Stores `user_profiles` (with `email`) and multi-script memories with keyword overlap reinforcement. Background distillation extracts learning habits using `NEBIUS_QUESTION_MODEL` with `{"statement": null}` guard.
+- `src/chat_agent/slack/slack_app.py` & `slack_http.py` — Slack Bolt Socket Mode and webhook events. Enforces `ARYHANT_ALLOWED_EMAILS` allowlist via `client.users_info` (`users:read.email` scope). Unauthorized callers receive immediate deterministic polite denial without invoking the LLM runner. `/preferences` slash command opens interactive modal with real-time deletion.
+- `src/chat_agent/utils/text_formatter.py` — Semantically interprets raw Markdown into clean human-consumable text with blank lines and emoji preservation (`interpret_markdown`), un-gluing headings and numbers.
 - `src/chat_agent/infographics/` — ReportLab handwritten notebook-style study notes (`notes_builder.py`), lesson infographic posters (`builder.py`), procedural math & science diagrams (`diagrams.py`), and styling/branding (`theme.py`, `branding.json`).
 - `src/chat_agent/tools/tool_factory.py` — Direct tools: `get_current_time` (IST), `search_web` (multi-provider weighted search pool with fallback), `generate_study_notes_pdf` & `generate_infographic_pdf` (compile PDF and auto-upload to Slack in a background thread), and `upload_file_to_slack` (Slack external file upload API).
 - Channels (all call `run_agent`): `slack/slack_app.py` (Slack Bolt Socket Mode with `AsyncSocketModeHandler`), `slack/slack_http.py` (webhook events, threaded replies), `app.py` (FastAPI `/api/*`, `/webhooks/*`, rate limiting, QStash signature verification via `qstash_authentication.py`; webhook auth via `webhooks.py`), `main.py` (CLI orchestrator).
 - Multimodal flow in `utils/multimodal.py`: `extract_slack_files` → `download_slack_file` (Bearer bot token) → `validate_multimodal_payload` (regex + Groq prompt guard + OpenAI omni-moderation in `utils/input_validation.py`) → `build_adk_multimodal_content` (`types.Part.from_bytes`). Limits in settings: `MULTIMODAL_ENABLED`, `MAX_SINGLE_ATTACHMENT_SIZE_KB`, `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB`, `MAX_ATTACHMENTS_PER_MESSAGE`.
-- Config: `config/settings.py` — single pydantic-settings `Settings` from env; `*_ready` properties (`llm_ready`, `slack_ready`, `email_ready`, `qstash_ready`, ...) gate which channels start. `config/__init__.py` re-exports them.
-- Math Formatting in `utils/math_formatter.py` — converts LaTeX markup into clean, readable plain-text school math.
-- Tests are hermetic (all HTTP/LLM/Slack calls mocked); `tests/conftest.py` provides `mock_settings` and a FastAPI `TestClient`. pytest config (pythonpath/testpaths) lives in `pyproject.toml`.
-- `docs/` is a docs7 documentation site (`docs.json` + `.mdx`).
+- Config: `config/settings.py` — single pydantic-settings `Settings` from env; strictly standardizes on `ARYHANT_TURSO_DATABASE_URL`, `ARYHANT_TURSO_AUTH_TOKEN`, `ARYHANT_REDIS_URL`, and `ARYHANT_ALLOWED_EMAILS`. No legacy fallback aliases.
+- Tests are hermetic (all HTTP/LLM/Slack calls mocked; 145 tests pass with zero external keys); `tests/conftest.py` provides `mock_settings` and a FastAPI `TestClient`. pytest config lives in `pyproject.toml`.
+- `docs/` is a docs7 documentation site (`docs.json` + `*.mdx`).

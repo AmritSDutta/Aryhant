@@ -1,0 +1,115 @@
+---
+title: Turso memory and preferences
+description: Long-term student personal memory and learning preferences engine using Turso libSQL with multi-script tokenization, keyword overlap reinforcement, and interactive Slack modal.
+---
+
+# Turso memory and preferences
+
+Aryhant includes a persistent personal memory and preferences engine backed by **Turso (libSQL)**. This transforms the bot from a stateless chatbot into an authentic, adaptive educational companion that remembers student learning styles, recurring arithmetic focus areas, explanation language preferences, and mastered skills across sessions.
+
+The engine lives in `src/chat_agent/services/turso_memory_service.py` and pairs with an interactive Slack modal in `src/chat_agent/slack/preferences_modal.py`.
+
+## Two-Tier Memory Architecture
+
+Aryhant divides state into two complementary tiers:
+
+| Tier | Storage Engine | Scope | Lifecycle | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Tier 1: Thread History** | **Upstash Redis** | Per Slack Thread (`session_id`) | 24 Hours (`REDIS_TTL_SEC`) | Multi-turn conversation context, recent back-and-forth turns |
+| **Tier 2: Personal Memory** | **Remote Turso (libSQL)** | Per Student (`slack:user_id`) | Permanent / Long-term | Verified study preferences, recurring focus topics, mastered skills |
+
+## Architectural Workflow
+
+```mermaid
+flowchart TD
+  Msg["Student sends Slack message"] --> Ctx["Turso: get_user_memory_context (Top 6 weighted memories)"]
+  Ctx --> Prompt["Inject into System Prompt {USER_MEMORY_CONTEXT}"]
+  Prompt --> LLM["Model Runner: Nebius / Gemini"]
+  LLM --> Reply["Post Threaded Slack Reply"]
+  Reply --> BgTask["Background Async Task: extract_and_reinforce"]
+  BgTask --> FastLLM["Fast Model: Extract learning habit / focus area"]
+  FastLLM --> Overlap{"Keyword Overlap >= 2 with existing memory?"}
+  Overlap -->|Yes| Bump["Increment weight++ and refresh last_seen_at"]
+  Bump --> Check{"weight >= 3?"}
+  Check -->|Yes| Promote["Promote pattern to 'skill'"]
+  Check -->|No| Done["Done"]
+  Overlap -->|No| Insert["Insert new 'pattern' (weight=1)"]
+```
+
+## SQL Schema & Data Model
+
+Turso stores data across two relational tables with composite indexing:
+
+```sql
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    real_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('preference', 'fact', 'pattern', 'skill')),
+    text TEXT NOT NULL,
+    keywords TEXT NOT NULL,                      -- JSON array of strings: '["lcm", "hcf", "fractions"]'
+    weight INTEGER NOT NULL DEFAULT 1,
+    source TEXT NOT NULL CHECK(source IN ('request', 'interest', 'wake', 'manual')),
+    category TEXT,                               -- e.g., 'Mathematics', 'Science', 'Language', 'Tone'
+    request_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_user_kind ON memories(user_id, kind);
+CREATE INDEX IF NOT EXISTS idx_memories_user_weight ON memories(user_id, weight DESC, last_seen_at DESC);
+```
+
+### Privacy & Data Invariants
+
+- **Zero PII in Memory Text**: The `text` field in `memories` strictly stores prompt-ready pedagogical principles (e.g., *"Prefers step-by-step arithmetic hints before seeing final answers"*). It **never** stores raw student messages, phone numbers, addresses, or private details.
+- **Tenant Isolation**: Every query filters strictly on `user_id = 'slack:U...'`. A student's memories are completely isolated from other users.
+
+## Multi-Script Keyword Tokenization
+
+To support multilingual ICSE students (English, Hindi, and Bengali) without heavy external NLP dependencies, the engine implements a regex-based Unicode multi-script tokenizer:
+
+```python
+MULTI_SCRIPT_TOKEN_RE = re.compile(r"[\w\u0900-\u097F\u0980-\u09FF]+", re.UNICODE)
+```
+
+- Normalizes text and extracts tokens with $\ge 3$ characters.
+- Filters domain-specific stopwords (`the`, `please`, `explain`, `questions`).
+- Extracts Sanskrit/Hindi Devanagari (`\u0900-\u097F`) and Bengali (`\u0980-\u09FF`) scripts natively.
+
+## Autonomous Reinforcement & Skill Promotion
+
+1. **Initial Observation**: A new habit or focus topic is recorded as a `pattern` with `weight = 1`.
+2. **Deduplication via Overlap**: When a student asks a related question in subsequent sessions, the tokenizer checks keyword overlap with existing memories. If $\ge 2$ keywords overlap, `weight` is incremented (`weight++`) instead of creating redundant rows.
+3. **Skill Promotion (`weight >= 3`)**: When a pattern reaches `weight >= 3`, the engine automatically elevates its `kind` to `'skill'`. In the Slack modal and prompt context, it is badged as a **Mastered Topic / Learned Skill**.
+
+## Interactive Slack Management (`/preferences`)
+
+Students and teachers have complete transparency and data sovereignty over what Aryhant remembers:
+
+- **Slash Command**: Typing `/preferences` in Slack triggers an ephemeral `views_open` call opening a private Block Kit popup modal.
+- **Learned Skills Badges**: Displays high-confidence mastered topics at the top.
+- **Interactive Deletion**: Each preference has an individual `Delete` button accessory (`action_id="delete_memory_action"`). Clicking it deletes the record from Turso and immediately refreshes the modal in real time via `client.views_update`.
+- **Clear All Preferences**: A danger-styled button with a confirmation popup allowing users to exercise their right to be forgotten.
+
+## Database Migrations
+
+The database tables and indexes are initialized using an explicit migration script:
+
+```bash
+python scripts/init_turso_db.py
+```
+
+- If `ARYHANT_TURSO_DATABASE_URL` and `ARYHANT_TURSO_AUTH_TOKEN` are set, it connects to remote Turso (`aryhant`) via `libsql` with the local embedded replica (`aryhant.db`) and synchronizes the schema. If `libsql` is missing, the service and migration script fail loud with a `RuntimeError` rather than silently misconfiguring. Runtime network blips gracefully degrade to the local replica and default empty context to ensure uninterrupted student chat service.
+- On serverless platforms such as Google Cloud Run, continuous background timer threads (`sync_interval`) are avoided. Instead, all write operations execute an explicit pre-write sync (`conn.sync()`) to pull the latest remote changes into the local embedded replica before transaction write locking, followed by an immediate post-write sync after commit.
+- If unconfigured, it seamlessly initializes the local embedded replica database (`aryhant.db`, resolved via `settings.resolved_turso_db_path`) for local testing.

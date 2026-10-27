@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import random
+import re
 from typing import Any
 
 from google.genai import types
@@ -135,9 +136,9 @@ OPENAI_TOOLS: list[dict[str, Any]] = [
 ]
 
 
-def _system_prompt() -> str:
+def _system_prompt(user_memory_context: str | None = None) -> str:
     """Build the system instruction with the current IST timestamp."""
-    return format_instruction(INSTRUCTION)
+    return format_instruction(INSTRUCTION, user_memory_context=user_memory_context)
 
 
 def _is_transient_error(e: Exception) -> bool:
@@ -220,10 +221,34 @@ def _build_history_user_entry(user_content: str | list[dict[str, Any]]) -> str:
 def _append_nebius_history(session_id: str, user_content: str | list[dict[str, Any]], reply: str) -> None:
     """Store a successful turn in session history with pruned binary data."""
     history = _NEBIUS_HISTORY.setdefault(session_id, [])
-    history.append({"role": "user", "content": _build_history_user_entry(user_content)})
+    raw_user = _build_history_user_entry(user_content)
+    clean_user = re.sub(r"^\[channel=[^\]]+\]\s*", "", raw_user).strip() or raw_user
+    history.append({"role": "user", "content": clean_user})
     history.append({"role": "assistant", "content": reply})
     if len(history) > _HISTORY_CAP:
         del history[: len(history) - _HISTORY_CAP]
+
+
+async def _get_nebius_history(session_id: str) -> list[dict[str, Any]]:
+    """Retrieve prior conversation turns from Redis or in-memory fallback."""
+    from chat_agent.services.redis_session_store import get_redis_session_store
+
+    store = get_redis_session_store()
+    turns = await store.get_history(session_id)
+    if turns:
+        return turns
+    return list(_NEBIUS_HISTORY.get(session_id, []))
+
+
+async def _save_nebius_history(session_id: str, user_content: str | list[dict[str, Any]], reply: str) -> None:
+    """Persist turn to Redis and local memory."""
+    _append_nebius_history(session_id, user_content, reply)
+    from chat_agent.services.redis_session_store import get_redis_session_store
+
+    store = get_redis_session_store()
+    user_str = _build_history_user_entry(user_content)
+    clean_text = re.sub(r"^\[channel=[^\]]+\]\s*", "", user_str).strip() or user_str
+    await store.append_exchange(session_id, clean_text, reply, assistant_role="assistant")
 
 
 async def _call_nebius_completion(
@@ -363,6 +388,7 @@ class NebiusModelRunner:
         user_id: str,
         session_id: str,
         content: types.Content,
+        user_memory_context: str | None = None,
     ) -> str:
         """Execute chat request against Nebius vision model with retries and fallback."""
         user_content = _build_nebius_content(content)
@@ -371,8 +397,8 @@ class NebiusModelRunner:
         base_url = getattr(settings, "NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
         model = getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
 
-        messages: list[dict[str, Any]] = [{"role": "system", "content": _system_prompt()}]
-        messages.extend(_NEBIUS_HISTORY.get(session_id, []))
+        messages: list[dict[str, Any]] = [{"role": "system", "content": _system_prompt(user_memory_context)}]
+        messages.extend(await _get_nebius_history(session_id))
         messages.append({"role": "user", "content": user_content})
 
         if api_key:
@@ -391,7 +417,7 @@ class NebiusModelRunner:
                     )
                     if reply:
                         logger.info("[Model Execution] ✅ Success response received from Nebius '%s'", model)
-                        _append_nebius_history(session_id, user_content, reply)
+                        await _save_nebius_history(session_id, user_content, reply)
                         return reply
                 except Exception as e:
                     logger.warning("[Model Execution] ⚠️ Nebius model '%s' failed (attempt %d/3): %s", model, attempt + 1, e)
@@ -411,7 +437,7 @@ class NebiusModelRunner:
                     base_url="https://api.openai.com/v1",
                 )
                 if reply:
-                    _append_nebius_history(session_id, user_content, reply)
+                    await _save_nebius_history(session_id, user_content, reply)
                     return reply
             except Exception as fb_err:
                 logger.error("[Model Execution] ❌ Fallback model %s failed: %s", fallback_gpt, fb_err)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -14,6 +15,7 @@ from chat_agent.slack.post_generator import generate_slack_post
 
 logger = logging.getLogger(__name__)
 _MENTION = re.compile(r"<@[^>]+>\s*")
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def verify_slack_signature(body: bytes, timestamp: str, signature: str, secret: str) -> bool:
@@ -122,7 +124,16 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
         user = event.get("user") or "slack-user"
         thread_ts = event.get("thread_ts") or ""
         msg_ts = event.get("ts") or str(time.time())
-        prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts}]\n{event_text(event)}"
+        from chat_agent.services.turso_memory_service import get_turso_memory_service
+
+        user_id_key = f"slack:{user}"
+        turso_svc = get_turso_memory_service()
+        try:
+            memory_context = await turso_svc.aget_user_memory_context(user_id_key)
+        except Exception as exc:
+            logger.warning("Failed to fetch memory context in Slack HTTP handler for %s: %s", user_id_key, exc)
+            memory_context = "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
+        prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{event_text(event)}"
 
         attachments: list[tuple[bytes, str]] = []
         if settings.MULTIMODAL_ENABLED:
@@ -132,10 +143,11 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
         session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
         reply = await run_agent(
-            user_id=f"slack:{user}",
+            user_id=user_id_key,
             session_id=session_id,
             message=prompt,
             attachments=attachments,
+            user_memory_context=memory_context,
         )
         post_data = generate_slack_post(reply)
         await post_slack_message(
@@ -144,6 +156,16 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
             thread_ts=thread_ts or msg_ts,
             blocks=post_data["blocks"],
         )
+        bg_task = asyncio.create_task(
+            turso_svc.extract_and_reinforce(
+                user_id=user_id_key,
+                user_text=event_text(event),
+                assistant_reply=reply,
+            )
+        )
+        _BACKGROUND_TASKS.add(bg_task)
+        bg_task.add_done_callback(_BACKGROUND_TASKS.discard)
+
         return {"ok": True, "channel": channel}
     except Exception as err:
         remove_dedup_event(event_id)

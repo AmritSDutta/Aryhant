@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
     NEBIUS_MODEL: str = "nvidia/Nemotron-3.5-Super-VL"
     QUESTION_GENERATOR_PROVIDER: str = "nebius"  #"gemini"
+    QUESTION_GENERATOR_MODEL: str = "gemini-flash-lite-latest"
     NEBIUS_QUESTION_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
     NEBIUS_QUESTION_FALLBACK_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
     MAX_INPUT_CHARS: int = 5000
@@ -121,14 +122,16 @@ class Settings(BaseSettings):
     LOG_USER_INFO: bool = True
 
     # Database & Telemetry
-    TURSO_DATABASE_URL: str = ""
-    TURSO_AUTH_TOKEN: str = ""
+    ARYHANT_TURSO_DATABASE_URL: str = ""
+    ARYHANT_TURSO_AUTH_TOKEN: str = ""
+    ARYHANT_REDIS_URL: str = ""
+    TURSO_DATABASE_NAME: str = "aryhant"
+    TURSO_LOCAL_DB_PATH: str = "aryhant.db"
     GRAFANA_API_TOKEN: str = ""
     GRAFANA_USER_ID: str = "GRAFANA_USER_ID_2629876"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
     OTEL_EXPORTER_OTLP_HEADERS: str = ""
     OTEL_EXPORTER_OTLP_PROTOCOL: str = ""
-    REDIS_URL: str = ""
     REDIS_TTL_SEC: int = 86400
     OPENSEARCH_URL_AIVEN: str = ""
     OPENSEARCH_INDEX_NAME: str = "llm_waste"
@@ -258,6 +261,27 @@ class Settings(BaseSettings):
         return bool(self.webhook_shared_secret or self.slack_signing_secret)
 
     @property
+    def resolved_turso_db_path(self) -> Path:
+        """Return the absolute path to the local Turso replica database."""
+        p = Path(self.TURSO_LOCAL_DB_PATH)
+        if p.is_absolute():
+            return p
+        root_dir = Path(__file__).resolve().parent.parent.parent.parent
+        return root_dir / p
+
+    @property
+    def turso_database_url(self) -> str:
+        return self.ARYHANT_TURSO_DATABASE_URL or os.getenv("ARYHANT_TURSO_DATABASE_URL", "")
+
+    @property
+    def turso_auth_token(self) -> str:
+        return self.ARYHANT_TURSO_AUTH_TOKEN or os.getenv("ARYHANT_TURSO_AUTH_TOKEN", "")
+
+    @property
+    def redis_url(self) -> str:
+        return self.ARYHANT_REDIS_URL or os.getenv("ARYHANT_REDIS_URL", "")
+
+    @property
     def email_ready(self) -> bool:
         return bool(self.EMAIL_ENABLED and self.EMAIL_ADDRESS and self.EMAIL_PASSWORD)
 
@@ -300,6 +324,10 @@ class Settings(BaseSettings):
     @property
     def question_generator_provider(self) -> str:
         return self.QUESTION_GENERATOR_PROVIDER
+
+    @property
+    def question_generator_model(self) -> str:
+        return self.QUESTION_GENERATOR_MODEL or "gemini-flash-lite-latest"
 
     @property
     def nebius_question_model(self) -> str:

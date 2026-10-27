@@ -1,0 +1,79 @@
+---
+title: Redis session history
+description: Private Upstash Redis session store managing multi-turn conversation thread histories with a 20-turn sliding window and 24-hour TTL.
+---
+
+# Redis session history
+
+Aryhant manages conversation continuity using an authenticated private Redis instance (such as Upstash Redis). Multi-turn chat context in Slack threads is persisted in Redis rather than volatile in-memory process dictionaries, ensuring conversations survive application restarts, container redeployments, and autoscaling events.
+
+The implementation lives in `src/chat_agent/services/redis_session_store.py` and is automatically integrated into both direct runners (`gemini_model_runner.py` and `nebius_model_runner.py`).
+
+## Architecture & Data Flow
+
+When a student or teacher interacts with Aryhant in a Slack thread, the session store loads prior conversation turns, feeds them to the language model, and records the latest turn using an atomic Redis pipeline with sliding window truncation.
+
+```mermaid
+flowchart TD
+  Event["Slack Message in Thread"] --> Key["Resolve Session Key: aryhant:session:id:history"]
+  Key --> Read["LRANGE -20 -1 (Fetch last 20 turns)"]
+  Read --> LLM["Model Runner: Nebius / Gemini"]
+  LLM --> Reply["Generate LLM Response"]
+  Reply --> Pipe["Atomic Redis Pipeline"]
+  Pipe --> Push["RPUSH assistant turn"]
+  Pipe --> Trim["LTRIM -20 -1 (Enforce 20-turn cap)"]
+  Pipe --> Expire["EXPIRE 86400s (Refresh 24h TTL)"]
+  Reply --> Slack["Post Threaded Reply to Slack"]
+```
+
+## Key Invariants & Design Principles
+
+1. **Sliding Window of Last 20 Turns**:
+   - Long conversation threads can quickly exhaust model context windows and inflate token costs.
+   - Redis enforces a strict sliding window of the last 20 message turns (`_HISTORY_CAP = 20`) using Redis `LTRIM key -20 -1`. Older messages are discarded automatically without manual truncation logic.
+2. **24-Hour Sliding TTL (`REDIS_TTL_SEC`)**:
+   - Each time a new message turn is appended, the session key's expiration timer is refreshed (`pipe.expire(key, 86400)`).
+   - Inactive conversation threads expire automatically after 24 hours, keeping database memory usage lean and bounded.
+3. **Resilient In-Memory Fallback**:
+   - If `ARYHANT_REDIS_URL` is empty, unconfigured, or temporarily unreachable over the network, `RedisSessionStore` automatically falls back to a bounded in-memory LRU cache.
+   - This ensures zero downtime during local development, unit tests, or temporary Redis maintenance windows.
+
+## Redis Storage Format
+
+Conversation turns are stored in a standard Redis `List` under the key:
+`aryhant:session:{session_id}:history`
+
+Where each item in the list is a serialized JSON object:
+
+```json
+{"role": "user", "content": "Explain LCM and HCF with prime factorization"}
+{"role": "assistant", "content": "Prime factorization is a great way to find both..."}
+```
+
+## Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `ARYHANT_REDIS_URL` | `""` | Connection URL (e.g. `rediss://default:token@my-upstash.upstash.io:6379`). |
+| `REDIS_TTL_SEC` | `86400` | Expiration TTL in seconds (24 hours) |
+
+## Programmatic Usage
+
+```python
+from chat_agent.services.redis_session_store import get_redis_session_store
+
+session_store = get_redis_session_store()
+
+# Fetch history turns (returns list[dict[str, str]])
+history = await session_store.get_history(session_id="slack:C12345:1793031547.596")
+
+# Append turn and refresh TTL
+await session_store.append_turn(
+    session_id="slack:C12345:1793031547.596",
+    role="user",
+    content="What is the next step?",
+)
+
+# Clear session history
+await session_store.clear_history(session_id="slack:C12345:1793031547.596")
+```

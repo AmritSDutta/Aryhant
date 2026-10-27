@@ -9,6 +9,31 @@ from chat_agent.config import settings, slack_ready
 
 logger = logging.getLogger(__name__)
 
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+_USER_NAMES_CACHE: dict[str, tuple[str, str]] = {}
+_SYNCED_USER_PROFILES: set[tuple[str, str, str]] = set()
+
+
+async def _resolve_user_names(client: Any, user_id: str) -> tuple[str, str]:
+    """Resolve display and real name for a Slack user with memory caching."""
+    if not user_id or user_id == "slack-user":
+        return ("Aryhant Student", "Student")
+    if user_id in _USER_NAMES_CACHE:
+        return _USER_NAMES_CACHE[user_id]
+    try:
+        resp = await client.users_info(user=user_id)
+        if resp.get("ok"):
+            u = resp.get("user") or {}
+            prof = u.get("profile") or {}
+            real = prof.get("real_name") or u.get("real_name") or "Student"
+            display = prof.get("display_name") or u.get("name") or real
+            names = (display, real)
+            _USER_NAMES_CACHE[user_id] = names
+            return names
+    except Exception as exc:
+        logger.debug("Slack users_info lookup notice for %s: %s", user_id, exc)
+    return ("Aryhant Student", "Student")
+
 
 def build_slack_app() -> Any:
     try:
@@ -23,6 +48,53 @@ def build_slack_app() -> Any:
 
 
 def _register_handlers(app: Any) -> None:
+    @app.command("/preferences")
+    async def on_preferences_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        trigger_id = body.get("trigger_id")
+        user_id = body.get("user_id") or "slack-user"
+        if trigger_id:
+            from chat_agent.services.turso_memory_service import get_turso_memory_service
+            from chat_agent.slack.preferences_modal import build_preferences_modal
+
+            turso_service = get_turso_memory_service()
+            memories = await turso_service.alist_user_memories(f"slack:{user_id}")
+            view = build_preferences_modal(memories)
+            await client.views_open(trigger_id=trigger_id, view=view)
+
+    @app.action("delete_memory_action")
+    async def on_delete_memory(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id") or "slack-user"
+        actions = body.get("actions", [])
+        memory_id = actions[0].get("value") if actions else None
+        view_id = body.get("view", {}).get("id")
+
+        if memory_id and view_id:
+            from chat_agent.services.turso_memory_service import get_turso_memory_service
+            from chat_agent.slack.preferences_modal import build_preferences_modal
+
+            turso_service = get_turso_memory_service()
+            await turso_service.adelete_memory(f"slack:{user_id}", memory_id)
+            updated = await turso_service.alist_user_memories(f"slack:{user_id}")
+            new_view = build_preferences_modal(updated)
+            await client.views_update(view_id=view_id, view=new_view)
+
+    @app.action("clear_memories_action")
+    async def on_clear_memories(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id") or "slack-user"
+        view_id = body.get("view", {}).get("id")
+
+        if view_id:
+            from chat_agent.services.turso_memory_service import get_turso_memory_service
+            from chat_agent.slack.preferences_modal import build_preferences_modal
+
+            turso_service = get_turso_memory_service()
+            await turso_service.aclear_user_memories(f"slack:{user_id}")
+            new_view = build_preferences_modal([])
+            await client.views_update(view_id=view_id, view=new_view)
+
     @app.event("app_mention")
     async def on_app_mention(event: dict[str, Any]) -> None:
         logger.info("Received app_mention event: %s", event)
@@ -54,7 +126,26 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
     user = event.get("user") or "slack-user"
     thread_ts = event.get("thread_ts") or ""
     msg_ts = event.get("ts") or ""
-    prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts}]\n{clip_text(text)}"
+    from chat_agent.services.turso_memory_service import get_turso_memory_service
+
+    user_id_key = f"slack:{user}"
+    turso_svc = get_turso_memory_service()
+    d_name, r_name = await _resolve_user_names(app.client, user)
+    user_sig = (user_id_key, d_name, r_name)
+    if user_sig not in _SYNCED_USER_PROFILES:
+        _SYNCED_USER_PROFILES.add(user_sig)
+        profile_task = asyncio.create_task(
+            turso_svc.aupdate_user_profile(user_id_key, display_name=d_name, real_name=r_name)
+        )
+        _BACKGROUND_TASKS.add(profile_task)
+        profile_task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    try:
+        memory_context = await turso_svc.aget_user_memory_context(user_id_key)
+    except Exception as exc:
+        logger.warning("Failed to fetch memory context in Slack app handler for %s: %s", user_id_key, exc)
+        memory_context = "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
+    prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{clip_text(text)}"
 
     attachments: list[tuple[bytes, str]] = []
     if settings.MULTIMODAL_ENABLED:
@@ -72,6 +163,7 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
             session_id=session_id,
             message=prompt,
             attachments=attachments,
+            user_memory_context=memory_context,
         )
     except Exception as err:
         logger.error("Agent failed for Slack event %s: %s", msg_ts, err)
@@ -86,6 +178,17 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
         thread_ts=thread_ts or msg_ts,
         blocks=post_data.get("blocks"),
     )
+    bg_task = asyncio.create_task(
+        turso_svc.extract_and_reinforce(
+            user_id=user_id_key,
+            user_text=text,
+            assistant_reply=reply,
+            display_name=d_name,
+            real_name=r_name,
+        )
+    )
+    _BACKGROUND_TASKS.add(bg_task)
+    bg_task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 async def start_slack() -> None:

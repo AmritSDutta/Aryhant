@@ -25,6 +25,7 @@ async def run_agent(
     message: str = "",
     attachments: list[tuple[bytes, str]] | None = None,
     custom_content: types.Content | None = None,
+    user_memory_context: str | None = None,
 ) -> str:
     """Execute the configured model runner asynchronously with text and optional attachments."""
     if custom_content is not None:
@@ -47,4 +48,9 @@ async def run_agent(
         content = build_adk_multimodal_content(prompt, media_items)
 
     runner = get_model_runner()
-    return await runner.run(user_id=user_id, session_id=session_id, content=content)
+    return await runner.run(
+        user_id=user_id,
+        session_id=session_id,
+        content=content,
+        user_memory_context=user_memory_context,
+    )

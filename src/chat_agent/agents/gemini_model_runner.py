@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 import random
+import re
 from typing import Any
 
 from google import genai
@@ -66,9 +67,9 @@ def _get_genai_client() -> genai.Client:
     return _genai_client
 
 
-def _system_prompt() -> str:
+def _system_prompt(user_memory_context: str | None = None) -> str:
     """Build the system instruction with the current IST timestamp."""
-    return format_instruction(INSTRUCTION)
+    return format_instruction(INSTRUCTION, user_memory_context=user_memory_context)
 
 
 def _prune_prior_binary_parts(session_id: str) -> None:
@@ -97,10 +98,45 @@ def _prune_prior_binary_parts(session_id: str) -> None:
 def _append_history(session_id: str, user_content: types.Content, reply: str) -> None:
     """Store a successful exchange in the in-memory session history (bounded)."""
     history = _HISTORY.setdefault(session_id, [])
-    history.append(user_content)
+    clean_parts: list[types.Part] = []
+    for p in getattr(user_content, "parts", None) or []:
+        text = getattr(p, "text", None)
+        if text:
+            cleaned_text = re.sub(r"^\[channel=[^\]]+\]\s*", "", text).strip() or text
+            clean_parts.append(types.Part.from_text(text=cleaned_text))
+        else:
+            clean_parts.append(p)
+    clean_user = types.Content(role=getattr(user_content, "role", "user") or "user", parts=clean_parts)
+    history.append(clean_user)
     history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply)]))
     if len(history) > _HISTORY_CAP:
         del history[: len(history) - _HISTORY_CAP]
+
+
+async def _get_combined_history(session_id: str) -> list[types.Content]:
+    """Load history from Redis session store with local fallback."""
+    from chat_agent.services.redis_session_store import get_redis_session_store
+
+    store = get_redis_session_store()
+    raw = await store.get_history(session_id)
+    if raw:
+        items: list[types.Content] = []
+        for r in raw:
+            role = "model" if r.get("role") in ("model", "assistant") else "user"
+            items.append(types.Content(role=role, parts=[types.Part.from_text(text=r.get("content", ""))]))
+        return items
+    return list(_HISTORY.get(session_id, []))
+
+
+async def _save_turn_to_history(session_id: str, user_content: types.Content, reply: str) -> None:
+    """Save user and model turns to Redis and update local history."""
+    _append_history(session_id, user_content, reply)
+    from chat_agent.services.redis_session_store import get_redis_session_store
+
+    user_text = "".join(getattr(p, "text", "") for p in (getattr(user_content, "parts", None) or [])) or "[Multimodal content]"
+    store = get_redis_session_store()
+    clean_text = re.sub(r"^\[channel=[^\]]+\]\s*", "", user_text).strip() or user_text
+    await store.append_exchange(session_id, clean_text, reply, assistant_role="model")
 
 
 async def _execute_tool_call(function_call: Any) -> types.Part:
@@ -122,11 +158,11 @@ async def _execute_tool_call(function_call: Any) -> types.Part:
     return types.Part.from_function_response(name=function_call.name, response={"result": result})
 
 
-async def _call_gemini(model: str, contents: list[types.Content]) -> str:
+async def _call_gemini(model: str, contents: list[types.Content], user_memory_context: str | None = None) -> str:
     """Call Google GenAI directly with tool support (manual function-calling loop)."""
     client = _get_genai_client()
     config = types.GenerateContentConfig(
-        system_instruction=_system_prompt(),
+        system_instruction=_system_prompt(user_memory_context),
         temperature=0.2,
         max_output_tokens=settings.max_output_tokens,
         safety_settings=safety_settings,
@@ -184,6 +220,7 @@ async def _run_with_retry_and_fallback(
     user_id: str,
     session_id: str,
     content: types.Content,
+    user_memory_context: str | None = None,
 ) -> str:
     """Call a randomly selected FIRST_CHOICE_MODELS model up to 3 times, then fall back to FALLBACK_GPT_MODEL."""
     first_choice_models = getattr(settings, "FIRST_CHOICE_MODELS", []) or [settings.model]
@@ -197,10 +234,11 @@ async def _run_with_retry_and_fallback(
         )
         try:
             logger.info("[Model Execution] Sending request to Google GenAI model: %s", chosen_model)
-            reply = await _call_gemini(chosen_model, list(_HISTORY.get(session_id, [])) + [content])
+            history = await _get_combined_history(session_id)
+            reply = await _call_gemini(chosen_model, history + [content], user_memory_context=user_memory_context)
             if reply:
                 logger.info("[Model Execution] ✅ Success response received from model '%s'", chosen_model)
-                _append_history(session_id, content, reply)
+                await _save_turn_to_history(session_id, content, reply)
                 return reply
             logger.warning("[Model Execution] ⚠️ Empty response from model %s (attempt %d/3)", chosen_model, attempt + 1)
         except Exception as e:
@@ -232,7 +270,7 @@ async def _run_with_retry_and_fallback(
                     resp = await client.chat.completions.create(
                         model=fallback_gpt,
                         messages=[
-                            {"role": "system", "content": _system_prompt()},
+                            {"role": "system", "content": _system_prompt(user_memory_context)},
                             {"role": "user", "content": user_text},
                         ],
                         max_completion_tokens=settings.max_output_tokens,
@@ -245,7 +283,7 @@ async def _run_with_retry_and_fallback(
                     resp = await client.chat.completions.create(
                         model=fallback_gpt,
                         messages=[
-                            {"role": "system", "content": _system_prompt()},
+                            {"role": "system", "content": _system_prompt(user_memory_context)},
                             {"role": "user", "content": user_text},
                         ],
                     )
@@ -274,7 +312,7 @@ async def _run_with_retry_and_fallback(
                 payload = {
                     "model": fallback_gpt,
                     "messages": [
-                        {"role": "system", "content": _system_prompt()},
+                        {"role": "system", "content": _system_prompt(user_memory_context)},
                         {"role": "user", "content": user_text},
                     ],
                     "max_completion_tokens": settings.max_output_tokens,
@@ -288,7 +326,7 @@ async def _run_with_retry_and_fallback(
                         payload = {
                             "model": fallback_gpt,
                             "messages": [
-                                {"role": "system", "content": _system_prompt()},
+                                {"role": "system", "content": _system_prompt(user_memory_context)},
                                 {"role": "user", "content": user_text},
                             ],
                         }
@@ -308,7 +346,7 @@ async def _run_with_retry_and_fallback(
 
             if reply:
                 logger.info("[Model Execution] ✅ Success response received from fallback model '%s'", fallback_gpt)
-                _append_history(session_id, content, reply)
+                await _save_turn_to_history(session_id, content, reply)
                 return reply
         except Exception as gpt_err:
             logger.error("[Model Execution] ❌ FALLBACK_GPT_MODEL %s failed: %s", fallback_gpt, gpt_err)
@@ -324,6 +362,7 @@ class GeminiModelRunner:
         user_id: str,
         session_id: str,
         content: types.Content,
+    user_memory_context: str | None = None,
     ) -> str:
         """Execute Gemini model with retries and fallback."""
         _prune_prior_binary_parts(session_id)
@@ -331,4 +370,5 @@ class GeminiModelRunner:
             user_id=user_id,
             session_id=session_id,
             content=content,
+            user_memory_context=user_memory_context,
         )

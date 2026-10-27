@@ -124,3 +124,14 @@ post = generate_slack_post(reply_text)
 - **Context Blocks**: Converts footer notes, concept hints, source citations, and timestamps (prefixed with `Note:`, `Hint:`, `Context:`, `Source:`, or `Timestamp:`) into styled `context` blocks.
 - **Paragraph Chunking**: Splits paragraphs exceeding 2800 characters to adhere to Slack's 3000-character section limit.
 - **20-Block Ceiling**: Enforces a strict ceiling of 20 blocks (`MAX_BLOCKS = 20`) to stay within Slack's message payload limits, appending a truncation notice when needed.
+
+## 6. Personal Memory & Preferences Modal (`/preferences`)
+
+Students and teachers can inspect and manage what Aryhant remembers about their learning habits and preferences using the `/preferences` slash command:
+
+- **Private Block Kit Modal**: Running `/preferences` calls `client.views_open`, presenting a private popup showing mastered skill badges and active educational preferences.
+- **Interactive Deletion**: Each preference item includes an interactive `Delete` button (`action_id="delete_memory_action"`). Clicking it triggers `client.views_update` to refresh the modal in real time without posting anything to the channel.
+- **Clear All Preferences**: A danger-styled button with a confirmation popup allows students to exercise their right to be forgotten.
+- **Background Learning**: In the background after message replies, Aryhant distills learning habits and updates the Turso memory store without adding latency to the student's Slack response.
+
+See [Turso memory and preferences](/turso-memory-preferences) for complete architecture and schema details.

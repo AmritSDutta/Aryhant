@@ -14,6 +14,7 @@
       { "group": "Channels", "pages": ["slack", "email", "multimodal"] },
       { "group": "API & Auth", "pages": ["api-reference"] },
       { "group": "Capabilities & Tools", "pages": ["web-search", "study-notes", "question-generation", "math-tool", "nebius", "observability"] },
+      { "group": "Memory & State", "pages": ["redis-session-history", "turso-memory-preferences"] },
 
       { "group": "Operations & Deployment", "pages": ["operations"] },
       { "group": "Troubleshooting", "pages": ["faq"] }

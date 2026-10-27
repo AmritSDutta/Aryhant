@@ -24,7 +24,8 @@ flowchart TD
   Runner["Direct Runner - runner.py"]
   GenAI["Direct Google GenAI - FIRST_CHOICE_MODELS"]
   GPT["Direct OpenAI Fallback - FALLBACK_GPT_MODEL"]
-  History["Bounded In-Memory History - Binary Pruning"]
+  History["Private Upstash Redis - 20-Turn Sliding Window & TTL"]
+  Turso["Turso libSQL - Memory & Preferences Engine"]
   Browser --> FastAPI
   SlackUser -->|Socket Mode| Runner
   SlackUser -->|HTTP Events| CF
@@ -33,6 +34,7 @@ flowchart TD
   EmailClient --> FastAPI
   FastAPI --> Runner
   Runner --> History
+  Runner --> Turso
   Runner --> GenAI
   GenAI -->|Transient Failover| GPT
 ```
@@ -79,6 +81,9 @@ flowchart LR
 - **Rich Slack Block Kit Formatting**: Converts raw markdown into Slack Block Kit structures (`header`, `divider`, `section`, `context`) while enforcing Slack's 20-block ceiling (`MAX_BLOCKS = 20`) and 3000-character section limit.
 - **Multimodal Attachment Pipeline**: Ingests images, audio, PDFs, CSVs, and plain text files with per-file (500 KB) and cumulative (2 MB) size budgeting, authenticated Slack CDN downloads, and prior-turn binary history pruning.
 - **Multi-Provider Web Search Pool**: Features weighted random selection and automatic failover across DuckDuckGo, Exa, Firecrawl, Tavily, and Serper with GPT summarization for contexts exceeding 10,000 characters.
+- **Private Redis Session Store**: Persists multi-turn conversation thread histories in private Upstash Redis with a strict 20-turn sliding window (`LTRIM`) and 24-hour TTL (`REDIS_TTL_SEC`), with seamless in-memory fallback.
+- **Turso Personal Memory & Preferences Engine**: Stores structured, PII-free student preferences, habits, and learned skills with multi-script tokenization (English, Hindi, Bengali), keyword overlap reinforcement, and automatic promotion to `'skill'` at `weight >= 3`.
+- **Interactive Slack Preferences Modal (`/preferences`)**: Provides student data sovereignty via a private Block Kit popup modal with real-time deletion and clear-all actions.
 
 ## Codebase Structure
 
@@ -87,6 +92,9 @@ flowchart LR
     <Tree.File name="docs.json" highlight />
     <Tree.File name="custom.css" />
     <Tree.File name="index.mdx" highlight />
+  </Tree.Folder>
+  <Tree.Folder name="scripts" defaultOpen>
+    <Tree.File name="init_turso_db.py" highlight />
   </Tree.Folder>
   <Tree.Folder name="proxies" defaultOpen>
     <Tree.File name="cloudflare-slack-ack.js" highlight />
@@ -131,9 +139,15 @@ flowchart LR
       <Tree.Folder name="schema" defaultOpen>
         <Tree.File name="fundamental_schema.py" highlight />
       </Tree.Folder>
+      <Tree.Folder name="services" defaultOpen>
+        <Tree.File name="__init__.py" />
+        <Tree.File name="redis_session_store.py" highlight />
+        <Tree.File name="turso_memory_service.py" highlight />
+      </Tree.Folder>
       <Tree.Folder name="slack" defaultOpen>
         <Tree.File name="post_generator.py" highlight />
         <Tree.File name="slack_app.py" highlight />
+        <Tree.File name="preferences_modal.py" highlight />
         <Tree.File name="slack_http.py" highlight />
       </Tree.Folder>
       <Tree.Folder name="tools" defaultOpen>

@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 import httpx
+
 from chat_agent.agents.runner import clip_text, run_agent
 from chat_agent.config import settings
 from chat_agent.slack.post_generator import generate_slack_post

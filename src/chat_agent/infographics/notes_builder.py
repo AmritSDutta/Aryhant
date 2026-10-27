@@ -14,12 +14,10 @@ from pathlib import Path
 from typing import Optional, Union
 
 from PIL import Image, ImageDraw, ImageFont
-from chat_agent.utils.math_formatter import clean_math_text
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     Flowable,
@@ -32,6 +30,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from chat_agent.utils.math_formatter import clean_math_text
 from .config import (
     _INDIC_REGEX,
     InfographicBranding,

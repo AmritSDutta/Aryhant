@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from chat_agent.config.settings import settings
 from fastapi import HTTPException, Request, status
 from qstash import Receiver
+
+from chat_agent.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

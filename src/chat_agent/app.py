@@ -4,6 +4,11 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
 from chat_agent.agents.runner import run_agent
 from chat_agent.config import (
     llm_ready,
@@ -17,10 +22,6 @@ from chat_agent.config.rate_limiter import Duration, Limiter, Rate, RateLimiter
 from chat_agent.slack.slack_http import handle_slack_payload
 from chat_agent.utils.input_validation import scan_for_vulnerability
 from chat_agent.webhooks import authorize_webhook
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 setup_logging()
 logger = logging.getLogger("chat_agent.app")

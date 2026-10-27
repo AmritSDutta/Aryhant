@@ -2,9 +2,9 @@ import asyncio
 import logging
 from typing import Optional
 
-from chat_agent.config import settings
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
+from chat_agent.config import settings
 from chat_agent.schema.fundamental_schema import QuestionAnswerSchema
 
 logger = logging.getLogger(__name__)

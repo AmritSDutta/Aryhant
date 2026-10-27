@@ -3,9 +3,10 @@ from typing import Optional
 
 import httpx
 import jwt
-from chat_agent.config import settings
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from chat_agent.config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -4,9 +4,10 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from google.genai import types
+
 from chat_agent.config import settings
 from chat_agent.utils.input_validation import get_LLM_feedback_on_input, scan_for_vulnerability
-from google.genai import types
 
 logger = logging.getLogger(__name__)
 

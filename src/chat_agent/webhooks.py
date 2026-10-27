@@ -3,9 +3,10 @@ from __future__ import annotations
 import hmac
 import logging
 
+from fastapi import HTTPException, Request
+
 from chat_agent.config import settings
 from chat_agent.slack.slack_http import verify_slack_signature
-from fastapi import HTTPException, Request
 
 logger = logging.getLogger(__name__)
 

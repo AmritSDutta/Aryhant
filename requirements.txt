@@ -24,7 +24,6 @@ pillow>=10.0.0
 markdown>=3.5
 openai>=2.49.0
 tavily-python>=0.7.26
-ddgs>=0.1.0
 duckduckgo-search>=6.0.0
 beautifulsoup4>=4.12.0
 typesafe-sdk>=0.7.2

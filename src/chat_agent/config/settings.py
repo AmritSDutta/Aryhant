@@ -39,8 +39,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "aryhant"
     MODEL_PROVIDER: str = "nebius"  #"gemini"
     USER_LLM_MODEL: str = "gemini-flash-lite-latest"
-    INFERENCE_MODEL: str = "gemini-flash-lite-latest"
-    FALLBACK_MODEL: str = "gemini-3.1-flash-lite"
     USER_LLM_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
@@ -66,7 +64,6 @@ class Settings(BaseSettings):
 
     # Webhook Integration
     WEBHOOK_SHARED_SECRET: str = ""
-    WEBHOOK_URL: str = ""
 
     # Email Integration (IMAP / SMTP)
     EMAIL_ENABLED: bool = False
@@ -76,9 +73,7 @@ class Settings(BaseSettings):
     EMAIL_SMTP_PORT: int = 587
     EMAIL_ADDRESS: str = ""
     EMAIL_PASSWORD: str = ""
-    EMAIL_POLL_SECONDS: int = 60
     EMAIL_ALLOWED_SENDERS: str = ""
-    EMAIL_MAX_BODY_CHARS: int = 4000
 
     # Search & External API Keys
     DEFAULT_SEARCH_PROVIDER: str = "random"
@@ -86,36 +81,16 @@ class Settings(BaseSettings):
     EXA_API_KEY: str = ""
     FIRECRAWL_API_KEY: str = ""
     SERPER_API_KEY: str = ""
-    NVIDIA_API_KEY: str = ""
-    OLLAMA_API_KEY: str = ""
-    OPENROUTER_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
-    MARKDOWN_API_KEY: str = ""
     BREVO_API_KEY: str = ""
     GROQ_API_KEY: str = ""
 
-    # Search Parameters & Cost Controls
+    # Search Parameters & Safety Controls
     DUCKDUCKGO_MAX_RESULTS: int = 5
     SEARCH_MAX_SNIPPET_LENGTH: int = 500
-    SUBTASK_MAX_LENGTH_FOR_CONSIDERATION: int = 1000
-    INFERENCE_MAX_RETRY: int = 3
     MODERATION_API_CHECK_REQ: bool = False
-    COST_SPREADING_FACTOR: float = 0.03
-    LLM_PRE_CALL_DELAY_SECONDS: float = 5.0
-    TOKEN_USAGE_LOG_BASE: float = 100.0
-    FORMULA_WEIGHT_CALL_COUNT: float = 0.5
-    FORMULA_WEIGHT_TOKEN_COUNT: float = 0.5
-
-    # LangSmith & Ollama
-    ENABLE_LANGSMITH_TRACING_V2: str = "false"
-    LANGSMITH_PROJECT: str = "task-graph-execution"
-    USE_OLLAMA_CLOUD_URL: bool = True
-    OLLAMA_CLOUD_URL: str = "https://ollama.com"
-    MODEL_COST_CSV_PATH: str = "model_costs.csv"
-    MODEL_CAPABILITY_CSV_PATH: str = "model_capabilities.csv"
 
     # API Authentication & Auth0
-    API_KEY: str = ""
     REQUIRE_AUTH: bool = False
     AUTH0_DOMAIN: str = ""
     AUTH0_AUDIENCE: str = ""
@@ -126,7 +101,6 @@ class Settings(BaseSettings):
     ARYHANT_TURSO_DATABASE_URL: str = ""
     ARYHANT_TURSO_AUTH_TOKEN: str = ""
     ARYHANT_REDIS_URL: str = ""
-    TURSO_DATABASE_NAME: str = "aryhant"
     TURSO_LOCAL_DB_PATH: str = "aryhant.db"
     GRAFANA_API_TOKEN: str = ""
     GRAFANA_USER_ID: str = "GRAFANA_USER_ID_2629876"
@@ -141,11 +115,6 @@ class Settings(BaseSettings):
     FIRST_CHOICE_MODELS: list[str] = [
         "gemini-3.1-flash-lite",
         "gemini-flash-lite-latest"
-    ]
-
-    FALLBACK_MODELS: list[str] = [
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
     ]
 
     FALLBACK_GPT_MODEL: str = "gpt-6-luna"
@@ -165,7 +134,7 @@ class Settings(BaseSettings):
 
     @property
     def model(self) -> str:
-        return self.USER_LLM_MODEL or self.INFERENCE_MODEL or "gemini-flash-lite-latest"
+        return self.USER_LLM_MODEL or "gemini-flash-lite-latest"
 
     @property
     def api_key(self) -> str:
@@ -194,42 +163,6 @@ class Settings(BaseSettings):
     @property
     def webhook_shared_secret(self) -> str:
         return self.WEBHOOK_SHARED_SECRET or os.getenv("WEBHOOK_SHARED_SECRET", "")
-
-    @property
-    def email_enabled(self) -> bool:
-        return self.EMAIL_ENABLED
-
-    @property
-    def email_imap_host(self) -> str:
-        return self.EMAIL_IMAP_HOST
-
-    @property
-    def email_imap_port(self) -> int:
-        return self.EMAIL_IMAP_PORT
-
-    @property
-    def email_smtp_host(self) -> str:
-        return self.EMAIL_SMTP_HOST
-
-    @property
-    def email_smtp_port(self) -> int:
-        return self.EMAIL_SMTP_PORT
-
-    @property
-    def email_address(self) -> str:
-        return self.EMAIL_ADDRESS
-
-    @property
-    def email_password(self) -> str:
-        return self.EMAIL_PASSWORD
-
-    @property
-    def email_poll_seconds(self) -> int:
-        return self.EMAIL_POLL_SECONDS
-
-    @property
-    def email_max_body_chars(self) -> int:
-        return self.EMAIL_MAX_BODY_CHARS
 
     @property
     def email_allowed_senders_list(self) -> List[str]:
@@ -264,10 +197,6 @@ class Settings(BaseSettings):
     @property
     def llm_ready(self) -> bool:
         return bool(self.api_key)
-
-    @property
-    def nebius_ready(self) -> bool:
-        return bool(self.NEBIUS_API_KEY or os.getenv("NEBIUS_API_KEY", ""))
 
     @property
     def slack_ready(self) -> bool:

@@ -147,21 +147,18 @@ def parse_ddg_html(
 
 
 def search_ddgs_library(query: str, max_results: int = 5) -> Optional[List[Dict[str, Any]]]:
-    """Execute search using ddgs (or duckduckgo_search) Python library."""
+    """Execute search using duckduckgo_search Python library."""
     try:
-        try:
-            from ddgs import DDGS
-        except (ImportError, ModuleNotFoundError):
-            from duckduckgo_search import DDGS
+        from duckduckgo_search import DDGS
 
         with DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=max_results))
             return raw if raw else None
     except (ImportError, ModuleNotFoundError) as e_import:
-        logger.debug("ddgs library not installed (%s), using REST scraper.", e_import)
+        logger.debug("duckduckgo_search library not installed (%s), using REST scraper.", e_import)
         return None
     except Exception as e_ddg:
-        logger.info("ddgs library search failed (%s), using REST scraper.", e_ddg)
+        logger.info("duckduckgo_search library search failed (%s), using REST scraper.", e_ddg)
         return None
 
 

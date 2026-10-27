@@ -9,14 +9,14 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import requests
+from pydantic import BaseModel, Field
+
 from chat_agent.config import settings
 from chat_agent.tools.duckduckgo_search import (
     search_ddgs_library,
     search_duckduckgo,
 )
-from chat_agent.tools.math_tool import calculate_math
 from chat_agent.utils.openai_utility import generate_openai_summary
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

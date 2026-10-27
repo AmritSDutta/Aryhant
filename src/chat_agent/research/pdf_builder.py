@@ -23,6 +23,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from chat_agent.infographics.config import find_icon
 from chat_agent.infographics.notes_builder import get_reports_dir, register_pdf_fonts
 from chat_agent.research.models import ResearchMode, ResearchSource, TokenEconomics
 
@@ -39,6 +40,73 @@ def format_human_ist_datetime(dt: datetime | None = None) -> str:
     return ist_dt.strftime("%d %b %Y, %I:%M %p IST")
 
 
+
+_RESEARCH_FONTS_REGISTERED: bool = False
+_RESEARCH_FONT: str = "Lora"
+_RESEARCH_BOLD: str = "Lora-Bold"
+_RESEARCH_ITALIC: str = "Lora-Italic"
+_RESEARCH_BOLD_ITALIC: str = "Lora-BoldItalic"
+
+
+def register_research_fonts() -> tuple[str, str, str, str]:
+    """Register Lora serif font family for publication-grade research and deliberation PDFs."""
+    global _RESEARCH_FONTS_REGISTERED, _RESEARCH_FONT, _RESEARCH_BOLD, _RESEARCH_ITALIC, _RESEARCH_BOLD_ITALIC
+    if _RESEARCH_FONTS_REGISTERED:
+        return _RESEARCH_FONT, _RESEARCH_BOLD, _RESEARCH_ITALIC, _RESEARCH_BOLD_ITALIC
+
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        registered: set[str] = set(pdfmetrics.getRegisteredFontNames())
+        pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(pkg_dir, "..", "..", ".."))
+        fonts_dir = os.path.join(project_root, "assets", "fonts")
+
+        lora_reg = os.path.join(fonts_dir, "Lora-Regular.ttf")
+        lora_bold = os.path.join(fonts_dir, "Lora-Bold.ttf")
+        lora_italic = os.path.join(fonts_dir, "Lora-Italic.ttf")
+        lora_bold_italic = os.path.join(fonts_dir, "Lora-BoldItalic.ttf")
+
+        if os.path.isfile(lora_reg):
+            if "Lora" not in registered:
+                pdfmetrics.registerFont(TTFont("Lora", lora_reg))
+                b_font = "Lora"
+                if os.path.isfile(lora_bold):
+                    pdfmetrics.registerFont(TTFont("Lora-Bold", lora_bold))
+                    b_font = "Lora-Bold"
+                i_font = "Lora"
+                if os.path.isfile(lora_italic):
+                    pdfmetrics.registerFont(TTFont("Lora-Italic", lora_italic))
+                    i_font = "Lora-Italic"
+                bi_font = b_font
+                if os.path.isfile(lora_bold_italic):
+                    pdfmetrics.registerFont(TTFont("Lora-BoldItalic", lora_bold_italic))
+                    bi_font = "Lora-BoldItalic"
+                pdfmetrics.registerFontFamily(
+                    "Lora",
+                    normal="Lora",
+                    bold=b_font,
+                    italic=i_font,
+                    boldItalic=bi_font,
+                )
+            _RESEARCH_FONT = "Lora"
+            _RESEARCH_BOLD = "Lora-Bold" if "Lora-Bold" in pdfmetrics.getRegisteredFontNames() else "Lora"
+            _RESEARCH_ITALIC = "Lora-Italic" if "Lora-Italic" in pdfmetrics.getRegisteredFontNames() else "Lora"
+            _RESEARCH_BOLD_ITALIC = "Lora-BoldItalic" if "Lora-BoldItalic" in pdfmetrics.getRegisteredFontNames() else _RESEARCH_BOLD
+            _RESEARCH_FONTS_REGISTERED = True
+            return _RESEARCH_FONT, _RESEARCH_BOLD, _RESEARCH_ITALIC, _RESEARCH_BOLD_ITALIC
+    except Exception as exc:
+        logger.debug("Failed to register Lora fonts (%s); falling back to default.", exc)
+
+    primary, p_bold, p_italic, _ = register_pdf_fonts()
+    _RESEARCH_FONT = primary
+    _RESEARCH_BOLD = p_bold
+    _RESEARCH_ITALIC = p_italic
+    _RESEARCH_BOLD_ITALIC = p_bold
+    _RESEARCH_FONTS_REGISTERED = True
+    return _RESEARCH_FONT, _RESEARCH_BOLD, _RESEARCH_ITALIC, _RESEARCH_BOLD_ITALIC
+
 class PublicationCanvas(canvas.Canvas):
     """Two-pass canvas providing running headers, topic metadata, and dynamic page counts."""
 
@@ -46,6 +114,7 @@ class PublicationCanvas(canvas.Canvas):
         super().__init__(*args, **kwargs)
         self._saved_page_states: list[dict[str, Any]] = []
         self.doc_title: str = "Aryhant Intelligence Publication"
+        self.icon_path: str | None = None
 
     def showPage(self) -> None:
         state = dict(self.__dict__)
@@ -63,13 +132,21 @@ class PublicationCanvas(canvas.Canvas):
 
     def _draw_decorations(self, page_count: int) -> None:
         self.saveState()
-        primary_font, _, _, _ = register_pdf_fonts()
+        primary_font, _, _, _ = register_research_fonts()
         self.setFillColor(colors.HexColor("#475569"))
 
         # Top running header on multi-page documents (page 2+)
         if self._pageNumber > 1:
             self.setFont(primary_font, 8)
             header_text = self.doc_title[:80]
+            start_x = 36
+            if self.icon_path and os.path.exists(self.icon_path):
+                try:
+                    self.drawImage(self.icon_path, 36, 792 - 26, width=12, height=12, preserveAspectRatio=True, mask='auto')
+                    start_x = 52
+                except Exception:
+                    pass
+            self.drawString(start_x, 792 - 24, header_text)
             self.drawString(36, 792 - 24, header_text)
             self.setStrokeColor(colors.HexColor("#CBD5E1"))
             self.setLineWidth(0.5)
@@ -280,14 +357,37 @@ def build_research_pdf(
 
     flowables: list[Any] = []
 
-    # Title Banner Block
+    # Title Banner Block with leading brand icon
+    icon_path = find_icon(["icon.ico", "icon.png", "vedantu.jpg"])
     banner_text = f"<b>{html.escape(clean_topic)}</b>"
-    flowables.append(Paragraph(banner_text, styles["title"]))
-
     mode_title = "TECHNICAL WHITEPAPER & ARCHITECTURAL DEEP-DIVE" if is_tech else "EXECUTIVE DECISION & COMPARATIVE BUYING GUIDE"
     now_str = format_human_ist_datetime()
     meta_subtitle = f"{mode_title} &bull; {word_count} Words &bull; Published {now_str}"
-    flowables.append(Paragraph(meta_subtitle, styles["subtitle"]))
+
+    if icon_path and os.path.exists(icon_path):
+        try:
+            icon_flowable = RLImage(icon_path, width=42, height=42)
+            title_paras = [
+                Paragraph(banner_text, styles["title"]),
+                Paragraph(meta_subtitle, styles["subtitle"]),
+            ]
+            header_table = Table([[icon_flowable, title_paras]], colWidths=[52, 488])
+            header_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            flowables.append(header_table)
+        except Exception as icon_err:
+            logger.warning("Failed to render header icon: %s", icon_err)
+            flowables.append(Paragraph(banner_text, styles["title"]))
+            flowables.append(Paragraph(meta_subtitle, styles["subtitle"]))
+    else:
+        flowables.append(Paragraph(banner_text, styles["title"]))
+        flowables.append(Paragraph(meta_subtitle, styles["subtitle"]))
+
     flowables.append(HRFlowable(width="100%", thickness=1.5, color=primary_accent, spaceAfter=10))
 
     # Optional embedded images with proportional scaling
@@ -449,6 +549,7 @@ def build_research_pdf(
     def _make_canvas(*args: Any, **kwargs: Any) -> PublicationCanvas:
         c = PublicationCanvas(*args, **kwargs)
         c.doc_title = clean_topic
+        c.icon_path = icon_path
         return c
 
     doc.build(flowables, canvasmaker=_make_canvas)

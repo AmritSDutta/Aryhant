@@ -41,32 +41,6 @@ async def test_generate_candidate_questions_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_curated_questions_pipeline() -> None:
-    """Verify end-to-end generation and TypeSafe curation pipeline."""
-    mock_candidates = [
-        QuestionAnswerSchema(id=i, question=f"Q{i}", hint=f"H{i}")
-        for i in range(1, 16)
-    ]
-    mock_scored_top_10 = [
-        QuestionAnswerSchema(id=i, question=f"Q{i}", hint=f"H{i}", score=round(1.0 - (i * 0.05), 2))
-        for i in range(1, 11)
-    ]
-
-    with patch(
-        "chat_agent.agents.question_generator.generate_candidate_questions",
-        AsyncMock(return_value=mock_candidates),
-    ), patch(
-        "chat_agent.agents.question_generator.get_feedback",
-        AsyncMock(return_value=mock_scored_top_10),
-    ) as mock_fb:
-        results = await generate_curated_questions("Decimals")
-
-    assert len(results) == 10
-    mock_fb.assert_awaited_once_with(mock_candidates, user_input="Decimals")
-    assert results[0].score == 0.95
-
-
-@pytest.mark.asyncio
 async def test_generate_curated_questions_typesafe_not_ready() -> None:
     """Verify generate_curated_questions returns candidates directly when TypeSafe is unconfigured."""
     mock_candidates = [

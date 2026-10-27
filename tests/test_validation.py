@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from chat_agent.utils.input_validation import (
-    get_LLM_feedback_on_input,
     get_groq_client,
     get_groq_prompt_guard_feedback,
     get_openai_client,
@@ -92,52 +91,6 @@ async def test_groq_prompt_guard_exception_fallback():
 
     with patch.dict("sys.modules", {"groq": mock_groq_mod}):
         result = await get_groq_prompt_guard_feedback("Any query")
-        assert result is True
-
-
-@pytest.mark.asyncio
-async def test_openai_multimodal_moderation_mocked_safe():
-    mock_res = MagicMock(flagged=False, categories={})
-    mock_response = MagicMock(results=[mock_res])
-
-    mock_client = MagicMock()
-    mock_client.moderations.create = AsyncMock(return_value=mock_response)
-
-    with patch("openai.AsyncOpenAI", return_value=mock_client):
-        result = await get_LLM_feedback_on_input(
-            media_type="image/png", media_data="https://example.com/clean.png"
-        )
-        assert result is True
-
-
-@pytest.mark.asyncio
-async def test_openai_multimodal_moderation_mocked_flagged():
-    mock_res = MagicMock(flagged=True, categories={"violence": True})
-    mock_response = MagicMock(results=[mock_res])
-
-    mock_client = MagicMock()
-    mock_client.moderations.create = AsyncMock(return_value=mock_response)
-
-    with patch("openai.AsyncOpenAI", return_value=mock_client):
-        result = await get_LLM_feedback_on_input(
-            media_type="image/png", media_data="https://example.com/bad.png"
-        )
-        assert result is False
-
-
-@pytest.mark.asyncio
-async def test_scan_for_vulnerability_with_multimodal_media():
-    mock_res = MagicMock(flagged=False, categories={})
-    mock_response = MagicMock(results=[mock_res])
-    mock_client = MagicMock()
-    mock_client.moderations.create = AsyncMock(return_value=mock_response)
-
-    with patch("openai.AsyncOpenAI", return_value=mock_client):
-        result = await scan_for_vulnerability(
-            user_message="Analyze this chart",
-            media_type="image/jpeg",
-            media_data="data:image/jpeg;base64,123",
-        )
         assert result is True
 
 

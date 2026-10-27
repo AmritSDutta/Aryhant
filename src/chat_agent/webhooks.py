@@ -32,7 +32,8 @@ def authorize_webhook(request: Request, body: bytes) -> None:
         return
 
     if not shared and not slack_secret:
-        logger.error("Webhook rejected (503): Neither WEBHOOK_SHARED_SECRET nor SLACK_SIGNING_SECRET is configured on the server.")
+        logger.error("Webhook rejected (503): Neither WEBHOOK_SHARED_SECRET "
+                     "nor SLACK_SIGNING_SECRET is configured on the server.")
         raise HTTPException(status_code=503, detail="Service unavailable.")
 
     logger.warning("Webhook rejected (401): Credentials mismatched or invalid.")

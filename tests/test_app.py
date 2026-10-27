@@ -10,9 +10,10 @@ from chat_agent.config.qstash_authentication import verify_qstash
 
 @pytest.fixture(autouse=True)
 def override_qstash_auth():
-    """Bypass QStash verification for general app endpoint tests."""
+    """Bypass QStash verification and default auth for general app endpoint tests."""
     app.dependency_overrides[verify_qstash] = lambda: None
-    yield
+    with patch("chat_agent.config.auth0_config.settings.REQUIRE_AUTH", False):
+        yield
     app.dependency_overrides.pop(verify_qstash, None)
 
 
@@ -93,4 +94,3 @@ def test_slack_webhook_event_authorized(client: TestClient):
         assert res.status_code == 200
         assert res.json() == {"ok": True}
         mock_handle.assert_awaited_once()
-

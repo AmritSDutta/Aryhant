@@ -85,6 +85,9 @@ sequenceDiagram
 > [!IMPORTANT]
 > If Socket Mode is left enabled in the Slack Console, Slack will ignore your Request URL and route all events over WebSocket. Always disable Socket Mode when switching to the HTTP scale-to-zero path.
 
+> [!TIP]
+> For the comprehensive step-by-step setup guide with Cloudflare Dashboard / Wrangler commands, environment secret tables, and verification procedures, see [Cloudflare & QStash Scale-to-Zero Deployment](/deployment).
+
 ## 3. Payload Processing & Security
 
 `src/chat_agent/slack/slack_http.py` and `src/chat_agent/webhooks.py` handle inbound HTTP payloads:

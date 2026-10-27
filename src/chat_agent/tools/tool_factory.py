@@ -16,6 +16,7 @@ from chat_agent.tools.duckduckgo_search import (
     search_ddgs_library,
     search_duckduckgo,
 )
+from chat_agent.tools.math_tool import calculate_math
 from chat_agent.utils.openai_utility import generate_openai_summary
 
 logger = logging.getLogger(__name__)

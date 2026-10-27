@@ -135,3 +135,29 @@ async def test_redis_empty_lrange_no_fallback():
     assert history == []
 
 
+def test_redis_key_prefix_enforcement():
+    """Verify that format_session_key strictly prepends aryhant: and prevents nested prefixing."""
+    from chat_agent.services.redis_session_store import format_session_key, REDIS_KEY_PREFIX
+
+    # Standard session ID
+    k1 = format_session_key("session-abc")
+    assert k1 == "aryhant:session:session-abc:history"
+    assert k1.startswith(REDIS_KEY_PREFIX)
+
+    # Slack session ID
+    k2 = format_session_key("slack:C12345:1712345678.000")
+    assert k2 == "aryhant:session:slack:C12345:1712345678.000:history"
+    assert k2.startswith(REDIS_KEY_PREFIX)
+
+    # Already prefixed session ID (no nested aryhant:aryhant:)
+    k3 = format_session_key("aryhant:session:my-id:history")
+    assert k3 == "aryhant:session:my-id:history"
+    assert k3.startswith(REDIS_KEY_PREFIX)
+
+    # Partial prefixing
+    k4 = format_session_key("aryhant:session:custom-session")
+    assert k4 == "aryhant:session:custom-session:history"
+    assert k4.startswith(REDIS_KEY_PREFIX)
+
+
+

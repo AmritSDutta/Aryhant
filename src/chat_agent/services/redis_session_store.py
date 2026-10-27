@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 _MAX_IN_MEMORY_SESSIONS = 100
 _HISTORY_CAP = 20
 _IN_MEMORY_HISTORY: collections.OrderedDict[str, list[dict[str, str]]] = collections.OrderedDict()
+REDIS_KEY_PREFIX: str = "aryhant:"
+
+
+def format_session_key(session_id: str) -> str:
+    """Format and guarantee that every Redis key is strictly namespaced under 'aryhant:' prefix."""
+    raw = (session_id or "default").strip()
+    while raw.startswith(REDIS_KEY_PREFIX):
+        raw = raw[len(REDIS_KEY_PREFIX):].strip()
+    if raw.startswith("session:"):
+        raw = raw[len("session:"):].strip()
+    if raw.endswith(":history"):
+        raw = raw[:-len(":history")].strip()
+    key = f"{REDIS_KEY_PREFIX}session:{raw}:history"
+    assert key.startswith(REDIS_KEY_PREFIX), f"Redis key must start with '{REDIS_KEY_PREFIX}', got: {key}"
+    return key
 
 
 def _store_in_memory_turn(session_id: str, entry: dict[str, str]) -> None:
@@ -70,7 +85,7 @@ class RedisSessionStore:
         client = self._get_client()
         if client:
             try:
-                key = f"aryhant:session:{session_id}:history"
+                key = format_session_key(session_id)
                 raw_items = await client.lrange(key, -_HISTORY_CAP, -1)
                 history: list[dict[str, str]] = []
                 for item in (raw_items or []):
@@ -102,7 +117,7 @@ class RedisSessionStore:
         client = self._get_client()
         if client:
             try:
-                key = f"aryhant:session:{session_id}:history"
+                key = format_session_key(session_id)
                 pipe = client.pipeline(transaction=True)
                 pipe.rpush(key, json.dumps(u_entry))
                 pipe.rpush(key, json.dumps(a_entry))
@@ -121,7 +136,7 @@ class RedisSessionStore:
         client = self._get_client()
         if client:
             try:
-                key = f"aryhant:session:{session_id}:history"
+                key = format_session_key(session_id)
                 pipe = client.pipeline(transaction=True)
                 pipe.rpush(key, json.dumps(entry))
                 pipe.ltrim(key, -_HISTORY_CAP, -1)
@@ -138,7 +153,8 @@ class RedisSessionStore:
         client = self._get_client()
         if client:
             try:
-                await client.delete(f"aryhant:session:{session_id}:history")
+                key = format_session_key(session_id)
+                await client.delete(key)
             except Exception as exc:
                 logger.warning("Redis clear_history failed for %s: %s", session_id, exc)
 

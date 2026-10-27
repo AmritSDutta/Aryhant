@@ -257,6 +257,7 @@ async def _call_nebius_completion(
     api_key: str,
     base_url: str,
     session_id: str = "",
+    enable_tools: bool = True,
 ) -> str:
     """Execute chat completion request with manual tool calling loop."""
     convo = list(messages)
@@ -265,23 +266,23 @@ async def _call_nebius_completion(
 
         client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         for _ in range(_MAX_TOOL_ROUNDS):
+            call_kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": convo,  # type: ignore[arg-type]
+                "max_tokens": settings.max_output_tokens,
+                "temperature": 0.2,
+            }
+            if enable_tools:
+                call_kwargs["tools"] = OPENAI_TOOLS  # type: ignore[assignment]
             try:
-                resp = await client.chat.completions.create(
-                    model=model,
-                    messages=convo,  # type: ignore[arg-type]
-                    tools=OPENAI_TOOLS,  # type: ignore[arg-type]
-                    max_tokens=settings.max_output_tokens,
-                    temperature=0.2,
-                )
+                resp = await client.chat.completions.create(**call_kwargs)
             except Exception as tool_err:
-                logger.info("Nebius tool calling request failed (%s). Retrying without tools.", tool_err)
-                resp = await client.chat.completions.create(
-                    model=model,
-                    messages=convo,  # type: ignore[arg-type]
-                    max_tokens=settings.max_output_tokens,
-                    temperature=0.2,
-                )
-
+                if enable_tools:
+                    logger.info("Nebius tool calling request failed (%s). Retrying without tools.", tool_err)
+                    call_kwargs.pop("tools", None)
+                    resp = await client.chat.completions.create(**call_kwargs)
+                else:
+                    raise
             usage = getattr(resp, "usage", None)
             if usage:
                 logger.info(
@@ -356,10 +357,12 @@ async def _call_nebius_completion(
                 payload: dict[str, Any] = {
                     "model": model,
                     "messages": convo,
-                    "tools": OPENAI_TOOLS,
+                    # tools added below if enable_tools
                     "max_tokens": settings.max_output_tokens,
                     "temperature": 0.2,
                 }
+                if enable_tools:
+                    payload['tools'] = OPENAI_TOOLS
                 resp = await http_client.post(url, json=payload, headers=headers)
                 if resp.status_code == 400:
                     payload.pop("tools", None)
@@ -406,6 +409,8 @@ class NebiusModelRunner:
         session_id: str,
         content: types.Content,
         user_memory_context: str | None = None,
+        system_instruction: str | None = None,
+        enable_tools: bool = True,
     ) -> str:
         """Execute chat request against Nebius vision model with retries and fallback."""
         user_content = _build_nebius_content(content)
@@ -414,7 +419,8 @@ class NebiusModelRunner:
         base_url = getattr(settings, "NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
         model = getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
 
-        messages: list[dict[str, Any]] = [{"role": "system", "content": _system_prompt(user_memory_context)}]
+        sys_content = system_instruction if system_instruction is not None else _system_prompt(user_memory_context)
+        messages: list[dict[str, Any]] = [{"role": "system", "content": sys_content}]
         messages.extend(await _get_nebius_history(session_id))
         messages.append({"role": "user", "content": user_content})
 
@@ -432,6 +438,7 @@ class NebiusModelRunner:
                         api_key=api_key,
                         base_url=base_url,
                         session_id=session_id,
+                        enable_tools=enable_tools,
                     )
                     if reply:
                         logger.info("[Model Execution] ✅ Success response received from Nebius '%s'", model)
@@ -454,6 +461,7 @@ class NebiusModelRunner:
                     api_key=openai_key,
                     base_url="https://api.openai.com/v1",
                     session_id=session_id,
+                    enable_tools=enable_tools,
                 )
                 if reply:
                     await _save_nebius_history(session_id, user_content, reply)

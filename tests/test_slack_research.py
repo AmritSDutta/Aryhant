@@ -187,6 +187,11 @@ async def test_sandbox_tool_error_and_skipped_reasons():
         assert res_err["status"] == "error"
         assert res_err["reason"] == "HTTP 502"
 
+    long_code = "\n".join([f"x_{i} = {i}" for i in range(32)])
+    res_long = await execute_code_in_sandbox(long_code, api_key="dummy_key")
+    assert res_long["status"] == "skipped"
+    assert "code exceeds 30 lines" in res_long["reason"]
+
 
 @pytest.mark.asyncio
 async def test_redis_research_store():
@@ -389,11 +394,17 @@ async def test_dual_research_agent_flow_and_persistence():
         assert mock_client.chat_postMessage.call_count >= 2
         assert mock_client.chat_update.call_count >= 3
 
-        # Verify runtime execution date in synthesis prompt
+        # Verify runtime execution date and role in system_instruction
         run_call_kwargs = mock_runner.run.call_args[1]
+        sys_inst = run_call_kwargs.get("system_instruction", "")
+        assert "This is getting executed as of:" in sys_inst
+        assert "Principal Systems Architect" in sys_inst
+        assert run_call_kwargs.get("enable_tools") is False
+
+        # Verify user synthesis content
         sent_content = run_call_kwargs["content"]
         sent_text = sent_content.parts[0].text
-        assert "This is getting executed as of:" in sent_text
+        assert "Topic: Raft vs Paxos" in sent_text
 
         # Verify job was persisted to store upon success
         persisted = await agent.store.get_job(job_id)

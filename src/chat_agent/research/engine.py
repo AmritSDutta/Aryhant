@@ -115,8 +115,12 @@ async def gather_research_intelligence(
     candidate_code: str = ""
     candidate_title: str = ""
     if is_tech and c7_snippets:
-        candidate_code = c7_snippets[0].get("code", "")
-        candidate_title = c7_snippets[0].get("title", "Context7 Snippet")
+        for c in c7_snippets:
+            c_code = (c.get("code") or "").strip()
+            if c_code and len(c_code.splitlines()) < 30:
+                candidate_code = c_code
+                candidate_title = c.get("title", "Context7 Snippet")
+                break
 
     # Deduplicate sources by URL
     seen_urls: set[str] = set()

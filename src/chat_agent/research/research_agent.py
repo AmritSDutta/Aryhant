@@ -178,6 +178,8 @@ class DualResearchAgent:
                 user_id="research-vision",
                 session_id=session_id or f"vision-{int(time.time())}",
                 content=content,
+                system_instruction="You are an expert visual technical diagram and system architecture inspector. Transcribe all visible architecture components, data flows, labels, numbers, and system interfaces. Provide a dense, factual summary.",
+                enable_tools=False,
             )
         except Exception as exc:
             logger.warning("Visual attachment inspection failed: %s", exc)
@@ -329,12 +331,14 @@ class DualResearchAgent:
             runner = get_model_runner()
             synthesis_content = types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=f"{system_prompt}\n\n{user_synthesis_prompt}")],
+                parts=[types.Part.from_text(text=user_synthesis_prompt)],
             )
             raw_report = await runner.run(
                 user_id=user_id,
                 session_id=f"synth-{job_id}",
                 content=synthesis_content,
+                system_instruction=system_prompt,
+                enable_tools=False,
             )
 
             word_count = len(re.findall(r"\b\w+\b", raw_report))

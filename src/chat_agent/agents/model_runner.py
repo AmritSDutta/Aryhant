@@ -20,6 +20,8 @@ class ModelRunner(Protocol):
         session_id: str,
         content: types.Content,
         user_memory_context: str | None = None,
+        system_instruction: str | None = None,
+        enable_tools: bool = True,
     ) -> str:
         """Execute model with user message content and session context."""
         ...

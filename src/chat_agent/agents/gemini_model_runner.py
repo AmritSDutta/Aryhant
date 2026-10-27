@@ -158,15 +158,22 @@ async def _execute_tool_call(function_call: Any) -> types.Part:
     return types.Part.from_function_response(name=function_call.name, response={"result": result})
 
 
-async def _call_gemini(model: str, contents: list[types.Content], user_memory_context: str | None = None, session_id: str = "") -> str:
+async def _call_gemini(
+    model: str,
+    contents: list[types.Content],
+    user_memory_context: str | None = None,
+    session_id: str = "",
+    system_instruction: str | None = None,
+    enable_tools: bool = True,
+) -> str:
     """Call Google GenAI directly with tool support (manual function-calling loop)."""
     client = _get_genai_client()
     config = types.GenerateContentConfig(
-        system_instruction=_system_prompt(user_memory_context),
+        system_instruction=system_instruction if system_instruction is not None else _system_prompt(user_memory_context),
         temperature=0.2,
         max_output_tokens=settings.max_output_tokens,
         safety_settings=safety_settings,
-        tools=_TOOLS,
+        tools=_TOOLS if enable_tools else [],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
     convo = list(contents)
@@ -237,6 +244,8 @@ async def _run_with_retry_and_fallback(
     session_id: str,
     content: types.Content,
     user_memory_context: str | None = None,
+    system_instruction: str | None = None,
+    enable_tools: bool = True,
 ) -> str:
     """Call a randomly selected FIRST_CHOICE_MODELS model up to 3 times, then fall back to FALLBACK_GPT_MODEL."""
     first_choice_models = getattr(settings, "FIRST_CHOICE_MODELS", []) or [settings.model]
@@ -251,7 +260,14 @@ async def _run_with_retry_and_fallback(
         try:
             logger.info("[Model Execution] Sending request to Google GenAI model: %s", chosen_model)
             history = await _get_combined_history(session_id)
-            reply = await _call_gemini(chosen_model, history + [content], user_memory_context=user_memory_context, session_id=session_id)
+            reply = await _call_gemini(
+                chosen_model,
+                history + [content],
+                user_memory_context=user_memory_context,
+                session_id=session_id,
+                system_instruction=system_instruction,
+                enable_tools=enable_tools,
+            )
             if reply:
                 logger.info("[Model Execution] ✅ Success response received from model '%s'", chosen_model)
                 await _save_turn_to_history(session_id, content, reply)
@@ -379,6 +395,8 @@ class GeminiModelRunner:
         session_id: str,
         content: types.Content,
     user_memory_context: str | None = None,
+    system_instruction: str | None = None,
+    enable_tools: bool = True,
     ) -> str:
         """Execute Gemini model with retries and fallback."""
         _prune_prior_binary_parts(session_id)
@@ -387,4 +405,6 @@ class GeminiModelRunner:
             session_id=session_id,
             content=content,
             user_memory_context=user_memory_context,
+            system_instruction=system_instruction,
+            enable_tools=enable_tools,
         )

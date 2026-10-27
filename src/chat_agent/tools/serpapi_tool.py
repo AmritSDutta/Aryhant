@@ -14,10 +14,11 @@ async def fetch_google_ai_overview(query: str, api_key: str | None = None) -> di
     """Fetch Google AI Overview text blocks and citations from SerpApi."""
     key = api_key or getattr(settings, "SERPAPI_API_KEY", "") or ""
     if not key:
-        logger.info("SERPAPI_API_KEY unconfigured; skipping Google AI Overview.")
+        logger.info("[SerpApi] \u23f9 Skipped Google AI Overview: SERPAPI_API_KEY unconfigured.")
         return {"status": "skipped", "text": "", "references": []}
 
     clean_query = query.strip()
+    logger.info("[SerpApi] \u25b6 Starting Google AI Overview fetch for query: %r", clean_query)
     if not clean_query:
         return {"status": "empty_query", "text": "", "references": []}
 
@@ -78,6 +79,8 @@ async def fetch_google_ai_overview(query: str, api_key: str | None = None) -> di
             ]
 
             summary_text = "\n\n".join(text_parts).strip()
+            status_val = "success" if summary_text else "no_overview"
+            logger.info("[SerpApi] \u23f9 Completed Google AI Overview fetch for query: %r (status=%s, refs=%d, chars=%d)", clean_query, status_val, len(references), len(summary_text))
             return {
                 "status": "success" if summary_text else "no_overview",
                 "text": summary_text,
@@ -89,7 +92,9 @@ async def fetch_google_ai_overview(query: str, api_key: str | None = None) -> di
                 logger.warning("SerpApi request rejected (HTTP %s): Check or reset SERPAPI_API_KEY.", status_code)
             else:
                 logger.warning("SerpApi request failed with HTTP %s for %s", status_code, getattr(exc.request.url, "path", "/search"))
+            logger.info("[SerpApi] \u23f9 Completed Google AI Overview fetch with HTTP error (HTTP %s)", status_code)
             return {"status": "error", "error": f"HTTP {status_code}", "text": "", "references": []}
         except Exception as exc:
             logger.warning("SerpApi Google AI Overview query failed: %s", type(exc).__name__)
+            logger.info("[SerpApi] \u23f9 Completed Google AI Overview fetch with error: %s", type(exc).__name__)
             return {"status": "error", "error": type(exc).__name__, "text": "", "references": []}

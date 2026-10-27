@@ -21,10 +21,11 @@ async def run_tavily_mini_research_polling(
     """Execute Tavily Mini-Research with async polling, session tracking, and fallback."""
     key = api_key or getattr(settings, "TAVILY_API_KEY", "") or ""
     if not key:
-        logger.info("TAVILY_API_KEY unconfigured; skipping Tavily mini-research.")
+        logger.info("[Tavily] \u23f9 Skipped Tavily mini-research: TAVILY_API_KEY unconfigured.")
         return {"status": "skipped", "content": "", "sources": []}
 
     clean_query = query.strip()
+    logger.info("[Tavily] \u25b6 Starting Tavily mini-research for query: %r (session_id=%s)", clean_query, session_id)
     if not clean_query:
         return {"status": "empty_query", "content": "", "sources": []}
 
@@ -77,6 +78,7 @@ async def run_tavily_mini_research_polling(
                     for s in raw_sources
                     if isinstance(s, dict) and s.get("url")
                 ]
+                logger.info("[Tavily] \u23f9 Completed Tavily mini-research for query: %r (status=completed, elapsed=%.2fs, sources=%d)", clean_query, elapsed, len(sources))
                 return {
                     "status": "completed",
                     "content": str(res.get("content") or ""),
@@ -86,10 +88,13 @@ async def run_tavily_mini_research_polling(
             if current_status == "failed":
                 err_msg = str(res.get("error") or "Unknown error")
                 logger.warning("Tavily research task %s failed: %s", request_id, err_msg)
+                logger.info("[Tavily] \u23f9 Completed Tavily mini-research (status=failed, elapsed=%.2fs, error=%s)", elapsed, err_msg)
                 return {"status": "failed", "error": err_msg, "content": "", "sources": []}
 
         logger.warning("Tavily research task %s timed out after %ds", request_id, int(max_poll_seconds))
+        logger.info("[Tavily] \u23f9 Completed Tavily mini-research (status=timeout, elapsed=%.2fs)", elapsed)
         return {"status": "timeout", "content": "", "sources": []}
     except Exception as exc:
         logger.warning("Tavily mini-research polling exception: %s", exc)
+        logger.info("[Tavily] \u23f9 Completed Tavily mini-research with error: %s", exc)
         return {"status": "error", "error": str(exc), "content": "", "sources": []}

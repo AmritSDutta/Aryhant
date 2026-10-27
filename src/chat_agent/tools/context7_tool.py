@@ -15,7 +15,10 @@ async def search_context7(
     library: str | None = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
-    """Search Context7 v3 API for verified code snippets and documentation."""
+    """Search Context7 v3 API exclusively for finding coding documentation, library APIs, and verified code snippets.
+
+    Note: This tool is strictly for software libraries and technical coding documentation. It is NOT for general, domain, or market research.
+    """
     key = api_key or getattr(settings, "CONTEXT7_API_KEY", "") or ""
     if not key:
         logger.info("CONTEXT7_API_KEY unconfigured; skipping Context7 search.")

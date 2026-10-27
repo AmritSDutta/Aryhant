@@ -184,6 +184,8 @@ async def test_failed_attempt_does_not_duplicate_history():
         contents: list,
         user_memory_context: str | None = None,
         session_id: str = "",
+        system_instruction: str | None = None,
+        enable_tools: bool = True,
     ) -> str:
         calls["count"] += 1
         if calls["count"] == 1:

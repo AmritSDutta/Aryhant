@@ -256,6 +256,7 @@ async def _call_nebius_completion(
     messages: list[dict[str, Any]],
     api_key: str,
     base_url: str,
+    session_id: str = "",
 ) -> str:
     """Execute chat completion request with manual tool calling loop."""
     convo = list(messages)
@@ -290,6 +291,22 @@ async def _call_nebius_completion(
                     getattr(usage, "completion_tokens", 0) or 0,
                     getattr(usage, "total_tokens", 0) or 0,
                 )
+                if session_id:
+                    try:
+                        from chat_agent.services.redis_research_store import record_session_token_usage
+
+                        asyncio.create_task(
+                            record_session_token_usage(
+                                session_id=session_id,
+                                model_name=model,
+                                provider="Nebius",
+                                prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                                completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                                total_tokens=getattr(usage, "total_tokens", 0) or 0,
+                            )
+                        )
+                    except Exception:
+                        pass
             choice = resp.choices[0]
             msg = choice.message
             tool_calls = getattr(msg, "tool_calls", None)
@@ -414,6 +431,7 @@ class NebiusModelRunner:
                         messages=messages,
                         api_key=api_key,
                         base_url=base_url,
+                        session_id=session_id,
                     )
                     if reply:
                         logger.info("[Model Execution] ✅ Success response received from Nebius '%s'", model)
@@ -435,6 +453,7 @@ class NebiusModelRunner:
                     messages=messages,
                     api_key=openai_key,
                     base_url="https://api.openai.com/v1",
+                    session_id=session_id,
                 )
                 if reply:
                     await _save_nebius_history(session_id, user_content, reply)

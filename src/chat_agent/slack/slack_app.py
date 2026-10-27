@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+import time
 from typing import Any
 
 from chat_agent.agents.runner import clip_text, run_agent
@@ -10,37 +12,15 @@ from chat_agent.config import settings, slack_ready
 logger = logging.getLogger(__name__)
 
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
-_USER_PROFILE_CACHE: dict[str, tuple[str, str, str]] = {}
-_SYNCED_USER_PROFILES: set[tuple[str, str, str, str]] = set()
-
-POLITE_DENIAL_MESSAGE = (
-    "Hello! Access to this assistant is restricted to authorized users. "
-    "Your email address is not on the permitted list. "
-    "Please contact your workspace administrator if you need access."
+from chat_agent.slack.slack_auth import (
+    POLITE_DENIAL_MESSAGE,
+    _USER_PROFILE_CACHE,
+    check_slack_authorization,
+    resolve_user_profile_info,
 )
 
-
-async def _resolve_user_profile_info(client: Any, user_id: str) -> tuple[str, str, str]:
-    """Resolve display name, real name, and email for a Slack user with memory caching."""
-    if not user_id or user_id == "slack-user":
-        return ("Aryhant Student", "Student", "")
-    if user_id in _USER_PROFILE_CACHE:
-        return _USER_PROFILE_CACHE[user_id]
-    try:
-        resp = await client.users_info(user=user_id)
-        if resp.get("ok"):
-            u = resp.get("user") or {}
-            prof = u.get("profile") or {}
-            real = prof.get("real_name") or u.get("real_name") or "Student"
-            display = prof.get("display_name") or u.get("name") or real
-            email = (prof.get("email") or "").strip().lower()
-            info = (display, real, email)
-            _USER_PROFILE_CACHE[user_id] = info
-            logger.info("Resolved Slack user %s profile: display=%r, real=%r, email=%r", user_id, display, real, email)
-            return info
-    except Exception as exc:
-        logger.debug("Slack users_info lookup notice for %s: %s", user_id, exc)
-    return ("Aryhant Student", "Student", "")
+_resolve_user_profile_info = resolve_user_profile_info
+_SYNCED_USER_PROFILES: set[tuple[str, str, str, str]] = set()
 
 
 async def _resolve_user_names(client: Any, user_id: str) -> tuple[str, str]:
@@ -80,6 +60,68 @@ def _register_handlers(app: Any) -> None:
             memories = await turso_service.alist_user_memories(f"slack:{user_id}")
             view = build_preferences_modal(memories)
             await client.views_open(trigger_id=trigger_id, view=view)
+
+    async def _dispatch_slash_research_command(
+        ack: Any,
+        body: dict[str, Any],
+        client: Any,
+        command: str,
+    ) -> None:
+        user_id = body.get("user_id") or "slack-user"
+        user_id_key = f"slack:{user_id}"
+        is_allowed, _, _, email = await check_slack_authorization(client, user_id, notify_on_deny=False)
+        if not is_allowed:
+            logger.warning("Access denied for command %s from user %s (email: %r)", command, user_id, email)
+            await ack(POLITE_DENIAL_MESSAGE)
+            return
+        await ack()
+        topic = (body.get("text") or "").strip()
+        channel_id = body.get("channel_id") or ""
+        if not topic:
+            example = "Linux io_uring" if command == "/research" else "Best term life insurance"
+            await client.chat_postMessage(channel=channel_id, text=f"Please specify a topic or query, e.g. `{command} {example}`.")
+            return
+
+        from chat_agent.research.dispatcher import (
+            RESEARCH_CONCURRENCY_SEMAPHORE,
+            acquire_user_job_slot,
+            new_job_id,
+        )
+        if not await acquire_user_job_slot(user_id_key):
+            await client.chat_postMessage(
+                channel=channel_id,
+                text="⚠️ You currently have a research or deliberation job in progress. Please wait for it to complete.",
+            )
+            return
+
+        job_id = new_job_id(command)
+        from chat_agent.research import get_research_agent
+        agent = get_research_agent()
+
+        async def _run_command_job() -> None:
+            async with RESEARCH_CONCURRENCY_SEMAPHORE:
+                await agent.execute_job(
+                    job_id=job_id,
+                    command=command,
+                    topic=topic,
+                    channel_id=channel_id,
+                    thread_ts="",
+                    user_id=user_id_key,
+                    attachments=[],
+                    client=client,
+                )
+
+        task = asyncio.create_task(_run_command_job())
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    @app.command("/research")
+    async def on_research_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await _dispatch_slash_research_command(ack, body, client, "/research")
+
+    @app.command("/deliberate")
+    async def on_deliberate_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await _dispatch_slash_research_command(ack, body, client, "/deliberate")
 
     @app.action("delete_memory_action")
     async def on_delete_memory(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -195,6 +237,43 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
             logger.warning("Failed to download Slack attachments: %s", err)
 
     session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
+
+    from chat_agent.research.dispatcher import (
+        RESEARCH_CONCURRENCY_SEMAPHORE,
+        acquire_user_job_slot,
+        new_job_id,
+        parse_research_trigger,
+    )
+    trigger = parse_research_trigger(text)
+    if trigger:
+        cmd, req_topic = trigger
+        if not await acquire_user_job_slot(user_id_key):
+            await app.client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts or msg_ts,
+                text="⚠️ You currently have a research or deliberation job in progress. Please wait for it to complete.",
+            )
+            return
+        job_id = new_job_id(cmd)
+        from chat_agent.research import get_research_agent
+
+        async def _run_event_job() -> None:
+            async with RESEARCH_CONCURRENCY_SEMAPHORE:
+                await get_research_agent().execute_job(
+                    job_id=job_id,
+                    command=cmd,
+                    topic=req_topic,
+                    channel_id=channel,
+                    thread_ts=thread_ts or msg_ts,
+                    user_id=user_id_key,
+                    attachments=attachments,
+                    client=app.client,
+                )
+
+        res_task = asyncio.create_task(_run_event_job())
+        _BACKGROUND_TASKS.add(res_task)
+        res_task.add_done_callback(_BACKGROUND_TASKS.discard)
+        return
     try:
         reply = await run_agent(
             user_id=f"slack:{user}",

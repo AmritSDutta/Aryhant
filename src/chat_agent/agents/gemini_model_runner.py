@@ -158,7 +158,7 @@ async def _execute_tool_call(function_call: Any) -> types.Part:
     return types.Part.from_function_response(name=function_call.name, response={"result": result})
 
 
-async def _call_gemini(model: str, contents: list[types.Content], user_memory_context: str | None = None) -> str:
+async def _call_gemini(model: str, contents: list[types.Content], user_memory_context: str | None = None, session_id: str = "") -> str:
     """Call Google GenAI directly with tool support (manual function-calling loop)."""
     client = _get_genai_client()
     config = types.GenerateContentConfig(
@@ -181,6 +181,22 @@ async def _call_gemini(model: str, contents: list[types.Content], user_memory_co
                 getattr(usage, "candidates_token_count", 0) or 0,
                 getattr(usage, "total_token_count", 0) or 0,
             )
+            if session_id:
+                try:
+                    from chat_agent.services.redis_research_store import record_session_token_usage
+
+                    asyncio.create_task(
+                        record_session_token_usage(
+                            session_id=session_id,
+                            model_name=model,
+                            provider="Google GenAI",
+                            prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
+                            completion_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+                            total_tokens=getattr(usage, "total_token_count", 0) or 0,
+                        )
+                    )
+                except Exception:
+                    pass
         candidate = (resp.candidates or [None])[0]
         parts = list(getattr(getattr(candidate, "content", None), "parts", None) or [])
         calls = [p.function_call for p in parts if getattr(p, "function_call", None)]
@@ -235,7 +251,7 @@ async def _run_with_retry_and_fallback(
         try:
             logger.info("[Model Execution] Sending request to Google GenAI model: %s", chosen_model)
             history = await _get_combined_history(session_id)
-            reply = await _call_gemini(chosen_model, history + [content], user_memory_context=user_memory_context)
+            reply = await _call_gemini(chosen_model, history + [content], user_memory_context=user_memory_context, session_id=session_id)
             if reply:
                 logger.info("[Model Execution] ✅ Success response received from model '%s'", chosen_model)
                 await _save_turn_to_history(session_id, content, reply)

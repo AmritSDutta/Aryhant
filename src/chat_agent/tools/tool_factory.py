@@ -16,7 +16,11 @@ from chat_agent.tools.duckduckgo_search import (
     search_ddgs_library,
     search_duckduckgo,
 )
+from chat_agent.tools.context7_tool import search_context7
 from chat_agent.tools.math_tool import calculate_math
+from chat_agent.tools.sandbox_tool import execute_code_in_sandbox
+from chat_agent.tools.serpapi_tool import fetch_google_ai_overview
+from chat_agent.tools.tavily_research_tool import run_tavily_mini_research_polling
 from chat_agent.utils.openai_utility import generate_openai_summary
 
 logger = logging.getLogger(__name__)
@@ -821,6 +825,7 @@ def _is_allowed_upload_path(file_path: str) -> bool:
     allowed_roots = [
         (Path(tempfile.gettempdir()) / "aryhant_notes").resolve(),
         (Path(tempfile.gettempdir()) / "aryhant_infographics").resolve(),
+        (Path(tempfile.gettempdir()) / "aryhant_reports").resolve(),
     ]
     return any(resolved.is_relative_to(root) for root in allowed_roots)
 

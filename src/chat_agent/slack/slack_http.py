@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import random
 import re
 import time
 from typing import Any
@@ -81,6 +82,58 @@ async def post_slack_message(
         return data
 
 
+class SlackHTTPClientAdapter:
+    """HTTP client adapter providing chat_postMessage and chat_update for research workflows."""
+
+    async def chat_postMessage(
+        self,
+        channel: str,
+        text: str = "",
+        thread_ts: str = "",
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await post_slack_message(channel=channel, text=text, thread_ts=thread_ts, blocks=blocks)
+
+    async def chat_update(
+        self,
+        channel: str,
+        ts: str,
+        text: str = "",
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        token = settings.aryhant_slack_bot_token
+        payload: dict[str, Any] = {"channel": channel, "ts": ts}
+        if text:
+            payload["text"] = text
+        if blocks:
+            payload["blocks"] = blocks
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.post(
+                    "https://slack.com/api/chat.update",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json=payload,
+                )
+                return resp.json()
+        except Exception as exc:
+            logger.warning("SlackHTTPClientAdapter.chat_update failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
+
+    async def users_info(self, user: str) -> dict[str, Any]:
+        token = settings.aryhant_slack_bot_token
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    "https://slack.com/api/users.info",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"user": user},
+                )
+                return resp.json()
+        except Exception as exc:
+            logger.warning("SlackHTTPClientAdapter.users_info failed for %s: %s", user, exc)
+            return {"ok": False, "error": str(exc)}
+
+
 _PROCESSED_EVENTS: dict[str, float] = {}
 _DEDUP_TTL_SECONDS = 600.0
 
@@ -125,6 +178,9 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
         user = event.get("user") or "slack-user"
         thread_ts = event.get("thread_ts") or ""
         msg_ts = event.get("ts") or str(time.time())
+
+        client_adapter = SlackHTTPClientAdapter()
+
         from chat_agent.services.turso_memory_service import get_turso_memory_service
 
         user_id_key = f"slack:{user}"
@@ -143,6 +199,59 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
             attachments = await extract_and_download_slack_attachments(event)
 
         session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
+
+        raw_text = event_text(event).strip()
+        from chat_agent.research.dispatcher import (
+            RESEARCH_CONCURRENCY_SEMAPHORE,
+            acquire_user_job_slot,
+            new_job_id,
+            parse_research_trigger,
+        )
+        trigger = parse_research_trigger(raw_text)
+        if trigger:
+            cmd, req_topic = trigger
+
+            from chat_agent.slack.slack_auth import check_slack_authorization
+            is_allowed, _, _, email = await check_slack_authorization(
+                client=client_adapter,
+                user_id=user,
+                channel=channel,
+                thread_ts=thread_ts or msg_ts,
+                notify_on_deny=True,
+            )
+            if not is_allowed:
+                logger.warning("Access denied in Slack HTTP handler for research/deliberate user %s (email: %r)", user, email)
+                return {"ok": False, "error": "unauthorized"}
+
+            if not await acquire_user_job_slot(user_id_key):
+                await post_slack_message(
+                    channel=channel,
+                    thread_ts=thread_ts or msg_ts,
+                    text="⚠️ You currently have a research or deliberation job in progress. Please wait for it to complete.",
+                )
+                return {"ok": False, "error": "job_in_progress"}
+
+            job_id = new_job_id(cmd)
+            from chat_agent.research import get_research_agent
+
+            async def _run_http_research_job() -> None:
+                async with RESEARCH_CONCURRENCY_SEMAPHORE:
+                    await get_research_agent().execute_job(
+                        job_id=job_id,
+                        command=cmd,
+                        topic=req_topic,
+                        channel_id=channel,
+                        thread_ts=thread_ts or msg_ts,
+                        user_id=user_id_key,
+                        attachments=attachments,
+                        client=client_adapter,
+                    )
+
+            bg_job = asyncio.create_task(_run_http_research_job())
+            _BACKGROUND_TASKS.add(bg_job)
+            bg_job.add_done_callback(_BACKGROUND_TASKS.discard)
+            return {"ok": True, "job_id": job_id}
+
         reply = await run_agent(
             user_id=user_id_key,
             session_id=session_id,

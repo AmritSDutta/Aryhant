@@ -179,7 +179,12 @@ async def test_failed_attempt_does_not_duplicate_history():
     content = types.Content(parts=[types.Part.from_text(text="test")])
     calls = {"count": 0}
 
-    async def fake_call(model: str, contents: list, user_memory_context: str | None = None) -> str:
+    async def fake_call(
+        model: str,
+        contents: list,
+        user_memory_context: str | None = None,
+        session_id: str = "",
+    ) -> str:
         calls["count"] += 1
         if calls["count"] == 1:
             return ""

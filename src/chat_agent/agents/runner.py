@@ -48,9 +48,12 @@ async def run_agent(
         content = build_adk_multimodal_content(prompt, media_items)
 
     runner = get_model_runner()
-    return await runner.run(
+    raw_reply = await runner.run(
         user_id=user_id,
         session_id=session_id,
         content=content,
         user_memory_context=user_memory_context,
     )
+    from chat_agent.utils.text_formatter import format_human_readable_text
+
+    return format_human_readable_text(raw_reply)

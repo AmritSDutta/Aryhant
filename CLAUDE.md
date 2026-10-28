@@ -27,7 +27,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```powershell
 python -m pip install -e .          # first-time setup; editable install makes src/ importable (required for pytest too)
-python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000   # FastAPI server
+python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000   # FastAPI server (or infisical run -- python -m uvicorn ...)
+cd ui; infisical run -- npm run dev                             # React UI dev server on http://localhost:5173
 python -m chat_agent.main serve     # Slack Socket Mode
 python -m chat_agent.main chat --message "hi"   # one-shot local chat
 # other subcommands: slack | chat
@@ -43,6 +44,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 ```text
 ├── docs/                           # docs7 documentation site (docs.json, *.mdx)
 ├── proxies/                        # Edge proxies (Cloudflare Worker Slack ACK & QStash forwarder)
+├── ui/                             # React 18 + Vite static web UI (Cloudflare Pages)
 ├── src/chat_agent/                 # Primary application package
 │   ├── agents/                     # Aryhant persona, prompts, question generator, runners, admin
 │   │   ├── admin_agent.py          # Role 4: Autonomous administrative auditor (15d prune, 7d metrics, tools)

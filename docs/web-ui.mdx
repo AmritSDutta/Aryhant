@@ -1,0 +1,153 @@
+---
+title: Web UI
+description: React and Vite single-page companion application for Aryhant deployed on Cloudflare Pages with Auth0 PKCE authentication and real-time ICSE chat.
+---
+
+# Web UI
+
+The `/ui` directory houses a modern React 18 + TypeScript single-page application (SPA) providing a direct web interface for Aryhant. It serves as an interactive companion for St. Xavier's Grade 5 ICSE syllabus guidance, practice questions, and math problem-solving.
+
+The web app is optimized for static deployment to **Cloudflare Pages** and includes a zero-config development proxy for local backend connectivity.
+
+---
+
+## Architecture & Data Flow
+
+The frontend connects to the FastAPI backend at `/api/chat` and `/api/health`. During local development, Vite proxies API requests directly to the local Uvicorn instance to eliminate CORS configuration overhead.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Student as Student / User
+    participant UI as React UI (localhost:5173)
+    participant Proxy as Vite Dev Proxy
+    participant Backend as FastAPI Backend (localhost:8000)
+    participant Runner as run_agent (ICSE Persona)
+
+    Student->>UI: Enters message / math problem
+    alt Auth0 Configured
+        Note over UI: Retrieves silent token from localStorage
+    end
+    UI->>Proxy: POST /api/chat {message, session_id, channel="web"}
+    Proxy->>Backend: Forward request (CORS bypass)
+    Note over Backend: Rate limited to 20 req/min
+    Backend->>Runner: Execute pedagogical agent
+    Runner-->>Backend: Formatted plain-text & ASCII math reply
+    Backend-->>UI: {reply, model, channel}
+    UI-->>Student: Renders message in Lora typography
+```
+
+---
+
+## Key Features
+
+### 1. ICSE Grade 5 Companion
+- **Structured Explanations**: Answers formatted specifically for Grade 5 level comprehension.
+- **ASCII & Plain-Text Math**: Renders math using clean fractions (`3/5`), superscripts (`cm²`), and arithmetic operators without raw LaTeX clutter.
+- **Session Continuity**: Retains conversation history across page reloads by generating a unique session key persisted in `sessionStorage`.
+
+### 2. Typography & Visual Identity
+- **Font**: Styled with Google Font **Lora** for a classic, notebook-like reading experience.
+- **Header Avatar**: Displays the official character artwork from `Aryhant.jpg`.
+- **Tab Favicon**: Custom browser tab icon using `icon.ico`.
+
+### 3. Pure Auth0 Universal Login / PKCE
+- Powered by `@auth0/auth0-react`.
+- Uses `useRefreshTokens={true}` and `cacheLocation="localstorage"` to eliminate third-party cookie restrictions in modern browsers on `localhost`.
+- When Auth0 environment variables are omitted, the application runs automatically in open / demo mode.
+
+### 4. Rate Limit & Safety Alerts
+- Aligned with the backend's **20 requests/minute** limit (`Rate(20, Duration.MINUTE)`).
+- When the rate limit is reached, an alert banner displays a countdown message rather than failing silently.
+
+---
+
+## Directory Structure
+
+<Tree>
+  <Tree.Folder name="ui" defaultOpen>
+    <Tree.Folder name="public" defaultOpen>
+      <Tree.File name="Aryhant.jpg" />
+      <Tree.File name="icon.ico" />
+    </Tree.Folder>
+    <Tree.Folder name="src" defaultOpen>
+      <Tree.Folder name="components" defaultOpen>
+        <Tree.File name="ChatPanel.tsx" highlight />
+        <Tree.File name="Header.tsx" />
+        <Tree.File name="MessageInput.tsx" />
+        <Tree.File name="MessageItem.tsx" />
+        <Tree.File name="MessageList.tsx" />
+        <Tree.File name="StatusPill.tsx" />
+      </Tree.Folder>
+      <Tree.Folder name="lib">
+        <Tree.File name="api.ts" highlight />
+        <Tree.File name="config.ts" />
+        <Tree.File name="types.ts" />
+      </Tree.Folder>
+      <Tree.File name="App.tsx" />
+      <Tree.File name="index.css" />
+      <Tree.File name="main.tsx" />
+      <Tree.File name="vite-env.d.ts" />
+    </Tree.Folder>
+    <Tree.File name="index.html" />
+    <Tree.File name="package.json" />
+    <Tree.File name="tsconfig.json" />
+    <Tree.File name="vite.config.ts" highlight />
+  </Tree.Folder>
+</Tree>
+
+---
+
+## Local Development
+
+### 1. Install Dependencies
+```powershell
+cd ui
+npm.cmd install    # On Windows (or 'npm install' on Linux/macOS)
+```
+
+### 2. Environment Variables (Optional)
+Configure Vite environment variables when integrating with Auth0 or targeting a remote backend:
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `VITE_AUTH0_DOMAIN` | Auth0 tenant domain (e.g. `dev-xxx.us.auth0.com`) | `""` (runs unauthenticated) |
+| `VITE_AUTH0_CLIENT_ID` | Auth0 Single Page Application Client ID | `""` |
+| `VITE_AUTH0_AUDIENCE` | API audience identifier matching backend `AUTH0_AUDIENCE` | `""` |
+| `VITE_API_BASE_URL` | Remote FastAPI URL | `""` (uses local dev proxy `/api`) |
+
+### 3. Run Development Servers
+
+Start the FastAPI backend with Infisical secrets:
+```powershell
+infisical run -- python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000
+```
+
+Start the Vite frontend on `http://localhost:5173`:
+```powershell
+cd ui
+infisical run -- npm run dev
+# On Windows PowerShell:
+infisical run -- npm.cmd run dev
+```
+
+---
+
+## Cloudflare Pages Deployment
+
+### 1. Build Static Bundle
+```powershell
+npm.cmd run build
+```
+This runs TypeScript validation and compiles static assets to `ui/dist/`.
+
+### 2. Cloudflare Dashboard Settings
+- **Framework Preset**: `Vite`
+- **Root Directory**: `ui`
+- **Build Command**: `npm run build`
+- **Build Output Directory**: `dist`
+- **Production Environment Variables**:
+  - `VITE_API_BASE_URL`: `https://experiments.amritai.org` (or your deployed backend URL)
+  - `VITE_AUTH0_DOMAIN`: Your Auth0 domain
+  - `VITE_AUTH0_CLIENT_ID`: Your Auth0 client ID
+  - `VITE_AUTH0_AUDIENCE`: Your Auth0 API audience

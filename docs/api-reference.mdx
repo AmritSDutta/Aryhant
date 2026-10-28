@@ -13,7 +13,7 @@ The FastAPI application in `src/chat_agent/app.py` exposes the REST chat interfa
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/` | Application metadata | 30 / min | Public |
 | `GET` | `/api/health` | Liveness and health check | 60 / min | Public |
-| `POST` | `/api/chat` | One-shot REST agent execution | 5 / min | Auth0 Bearer Token (when `REQUIRE_AUTH=true`) |
+| `POST` | `/api/chat` | One-shot REST agent execution | 20 / min | Auth0 Bearer Token (when `REQUIRE_AUTH=true`) |
 | `POST` | `/webhooks/slack` | Slack HTTP Events webhook | Uncapped | Shared secret (`X-Webhook-Secret`) or Slack signature |
 
 ---
@@ -106,6 +106,8 @@ Receives Slack Events API notifications forwarded via Cloudflare Worker and Upst
 Allowed origins configured in `app.py`:
 - `http://localhost:8000`
 - `http://127.0.0.1:8000`
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
 - `https://experiments.amritai.org`
 
 ---

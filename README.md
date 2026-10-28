@@ -19,7 +19,8 @@ A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email,
 | Multi-Provider Web Search | Weighted random search pool across DuckDuckGo, Exa, Firecrawl, Tavily, and Serper with GPT summarization for large contexts |
 | Slack Locally | Native Slack Bolt Socket Mode with `AsyncSocketModeHandler` and `ARYHANT_ALLOWED_EMAILS` deterministic authorization |
 | Slack Over HTTP | Event filtering, threaded replies, and scale-to-zero proxying via Cloudflare Worker and Upstash QStash |
-| REST API | FastAPI `/api/chat` (Auth0 protected when `REQUIRE_AUTH=true`, 5/min rate limit), `/api/health`, `/webhooks/slack` |
+| REST API | FastAPI `/api/chat` (Auth0 protected when `REQUIRE_AUTH=true`, 20/min rate limit), `/api/health`, `/webhooks/slack` |
+| Web UI (Cloudflare Pages) | Modern React 18 + Vite SPA in `/ui` with Lora font, Auth0 PKCE login, and real-time ICSE chat companion |
 | Email | IMAP unread-message polling and SMTP replies |
 | Conversation State (Tier 1) | Private Upstash Redis with strict `aryhant:` prefix enforcement, 20-turn sliding window (`LTRIM`), and 24-hour TTL |
 | Personal Memory & Skills (Tier 2) | Remote Turso (libSQL) long-term memory engine with multi-script tokenization (English, Hindi, Bengali), user email persistence, and interactive `/preferences` Slack modal |
@@ -105,13 +106,20 @@ cp .env.example .env
 
 Set `USER_LLM_API_KEY` in `.env` to your Google AI Studio key. If testing OpenAI fallback, set `OPENAI_API_KEY`.
 
-### 2. Start the web preview
+### 2. Start the backend API locally
 
 ```bash
-python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000
+infisical run -- python -m uvicorn chat_agent.app:app --host 127.0.0.1 --port 8000
 ```
 
 Open <http://127.0.0.1:8000>. `GET /api/health` reports configuration readiness.
+
+To run and test the React Web UI locally (on `http://localhost:5173`):
+
+```bash
+cd ui
+infisical run -- npm run dev
+```
 
 ### 3. Try a one-shot prompt
 

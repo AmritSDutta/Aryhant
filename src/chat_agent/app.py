@@ -4,9 +4,10 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from chat_agent.agents.runner import run_agent
@@ -16,7 +17,7 @@ from chat_agent.config import (
     setup_logging,
     slack_http_ready,
 )
-from chat_agent.config.auth0_config import auth0
+from chat_agent.config.auth0_config import auth0, get_user_profile
 from chat_agent.config.grafana_config import setup_grafana
 from chat_agent.config.rate_limiter import Duration, Limiter, Rate, RateLimiter
 from chat_agent.slack.slack_http import handle_slack_payload
@@ -55,6 +56,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "https://experiments.amritai.org",
     ],
     allow_credentials=True,
@@ -99,22 +102,24 @@ async def health() -> dict:
     "/api/chat",
     response_model=ChatResponse,
     dependencies=[
-        Depends(RateLimiter(limiter=Limiter(Rate(5, Duration.MINUTE)))),
+        Depends(RateLimiter(limiter=Limiter(Rate(20, Duration.MINUTE)))),
     ],
 )
 async def chat(
     payload: ChatRequest,
     auth_info: dict = Depends(auth0.require_auth()),
+    token: HTTPAuthorizationCredentials | None = Security(HTTPBearer(auto_error=False)),
 ) -> ChatResponse:
-    user_profile = await get_user_profile(
-        access_token=token.credentials,
-        decoded_payload=auth_info.get("payload")
-    )
+    if settings.REQUIRE_AUTH:
+        await get_user_profile(
+            access_token=token.credentials if token else "",
+            decoded_payload=auth_info.get("payload"),
+        )
     if not await scan_for_vulnerability(payload.message):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Input validation failed: Potentially unsafe content detected.",
-        )
+            )
 
     prompt = f"[channel={payload.channel}]\n{payload.message}"
     if not llm_ready():
@@ -122,7 +127,7 @@ async def chat(
             "Demo mode (no USER_LLM_API_KEY). "
             "In Slack, mention the bot or DM it. Email works if EMAIL_ENABLED=true. "
             f"You said: {payload.message[:280]}"
-        )
+            )
         return ChatResponse(reply=reply, model="demo", channel=payload.channel)
     reply = await run_agent(payload.user_id, payload.session_id, prompt)
     return ChatResponse(reply=reply, model=settings.model, channel=payload.channel)

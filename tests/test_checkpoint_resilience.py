@@ -125,11 +125,9 @@ async def test_gather_intelligence_refetches_failed_stream():
     }
 
     with patch("chat_agent.research.engine.fetch_google_ai_overview", new_callable=AsyncMock) as mock_serp, \
-         patch("chat_agent.research.engine.run_tavily_mini_research_polling") as mock_tav, \
-         patch("chat_agent.research.engine.search_context7", new_callable=AsyncMock) as mock_c7:
+         patch("chat_agent.research.engine.run_tavily_mini_research_polling") as mock_tav:
 
         mock_serp.return_value = fresh_serp_data
-        mock_c7.return_value = {"status": "success", "code_snippets": []}
 
         intel = await gather_research_intelligence(
             topic="Paxos Protocol",

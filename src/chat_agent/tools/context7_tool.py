@@ -46,6 +46,9 @@ async def search_context7(
                 headers=headers,
                 params=params,
             )
+            if resp.status_code == 404:
+                logger.info("Context7: no library or code snippets found for query %r (HTTP 404).", clean_query)
+                return {"status": "not_found", "code_snippets": [], "info_snippets": []}
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
 

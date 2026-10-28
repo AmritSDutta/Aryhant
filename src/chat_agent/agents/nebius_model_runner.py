@@ -21,6 +21,7 @@ from chat_agent.tools.tool_factory import (
     generate_study_notes_pdf,
     get_current_time,
     search_web,
+
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ _MAX_TOOL_ROUNDS = 5
 _TOOLS: list[Any] = [
     get_current_time,
     search_web,
+
     generate_study_notes_pdf,
     generate_infographic_pdf,
     generate_practice_questions,

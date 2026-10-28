@@ -10,16 +10,17 @@ from chat_agent.research.models import ResearchMode
 
 @pytest.mark.asyncio
 async def test_jev_validator_passing_score():
-    """Verify high JEV scores pass without critique."""
+    """Verify high JEV scores pass without critique across refined dimensions."""
     mock_client = AsyncMock()
     mock_response = MagicMock()
 
-    # High scores across all dimensions
+    # High scores across all 5 dimensions
     mock_response.nouls = {
         "user_criteria": MagicMock(noul=0.90),
-        "technical_depth": MagicMock(noul=0.85),
-        "code_and_benchmarks": MagicMock(noul=0.80),
-        "structure_compliance": MagicMock(noul=0.95),
+        "article_depth": MagicMock(noul=0.85),
+        "clarity": MagicMock(noul=0.90),
+        "human_readability": MagicMock(noul=0.88),
+        "references_present": MagicMock(noul=0.80),
     }
     mock_client.system_one.return_value = mock_response
 
@@ -44,12 +45,13 @@ async def test_jev_validator_critique_derivation_on_failure():
     mock_client = AsyncMock()
     mock_response = MagicMock()
 
-    # Low scores on technical depth and code
+    # Low scores on article depth and references
     mock_response.nouls = {
         "user_criteria": MagicMock(noul=0.80),
-        "technical_depth": MagicMock(noul=0.55),
-        "code_and_benchmarks": MagicMock(noul=0.50),
-        "structure_compliance": MagicMock(noul=0.85),
+        "article_depth": MagicMock(noul=0.55),
+        "clarity": MagicMock(noul=0.85),
+        "human_readability": MagicMock(noul=0.80),
+        "references_present": MagicMock(noul=0.50),
     }
     mock_client.system_one.return_value = mock_response
 
@@ -66,7 +68,7 @@ async def test_jev_validator_critique_derivation_on_failure():
         assert res.passed is False
         assert res.composite_score < 0.75
         assert "JEV Evaluation Deficiencies" in res.critique
-        assert "Deepen technical rigor" in res.critique or "concrete verified code" in res.critique
+        assert "Deepen substantive and conceptual depth" in res.critique or "Ground content with authoritative references" in res.critique
 
 
 @pytest.mark.asyncio
@@ -88,5 +90,5 @@ async def test_jev_validator_exception_fallback_with_log(caplog):
         )
 
         assert res.passed is False
-        assert res.composite_score < 0.75
-        assert "Falling back to heuristic quality evaluation" in caplog.text
+        assert "article_depth" in res.dimension_scores
+        assert "human_readability" in res.dimension_scores

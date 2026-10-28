@@ -51,6 +51,7 @@ safety_settings = [
 _TOOLS: list[Any] = [
     get_current_time,
     search_web,
+
     generate_study_notes_pdf,
     generate_infographic_pdf,
     calculate_math,

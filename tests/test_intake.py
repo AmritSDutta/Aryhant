@@ -8,10 +8,14 @@ from chat_agent.research.models import ResearchMode
 
 def test_is_clear_scope_logic():
     """Verify clarity heuristics for auto-proceed decisions."""
-    # Detailed queries -> True (auto-proceed)
+    # Detailed architectural queries -> True (auto-proceed)
     assert is_clear_scope("Kafka vs RabbitMQ latency benchmarks") is True
     assert is_clear_scope("PostgreSQL indexing strategy internals") is True
     assert is_clear_scope("BGP routing protocol failure modes") is True
+
+    # High-volume question or catalog queries -> False (require intake card)
+    assert is_clear_scope("generate top 100 agentic AI questions as of today") is False
+    assert is_clear_scope("top 50 kubernetes interview questions") is False
 
     # Short / ambiguous queries & conversational filler -> False (intake card)
     assert is_clear_scope("python") is False
@@ -30,6 +34,11 @@ def test_formulate_scope_modes():
     assert "whitepaper" in tech_scope["objective"].lower()
     assert len(tech_scope["focus_areas"]) >= 3
     assert len(tech_scope["success_criteria"]) >= 3
+
+    # Question catalog query adapts criteria
+    q_scope = formulate_scope("top 100 agentic AI questions", ResearchMode.TECHNICAL)
+    assert any("question" in fa.lower() for fa in q_scope["focus_areas"])
+    assert any("question" in sc.lower() for sc in q_scope["success_criteria"])
 
     delib_scope = formulate_scope("Best Term Life Insurance", ResearchMode.DELIBERATE)
     assert "decision guide" in delib_scope["objective"].lower()

@@ -95,6 +95,13 @@ async def evaluate_research_safety(
         if "is_malicious" in response.nouls:
             prob_malicious = float(response.nouls["is_malicious"].noul)
 
+        logger.info(
+            "[TypeSafe JEV Safety] Topic '%s': prob_malicious=%.4f (is_safe=%s)",
+            clean_topic,
+            prob_malicious,
+            prob_malicious < 0.5,
+        )
+
         if prob_malicious >= 0.5:
             reason = "Topic flagged by JEV evaluation as potentially adversarial or unsafe."
             await _record_rejection(job_id=job_id, user_id=user_id, topic=clean_topic, reason=reason)

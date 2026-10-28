@@ -10,10 +10,11 @@ from chat_agent.research.models import ResearchMode
 logger = logging.getLogger(__name__)
 
 CRITIQUE_MAPPINGS = {
-    "user_criteria": "Address all user-specified success criteria and key topic focus dimensions directly.",
-    "technical_depth": "Deepen technical rigor: expand internal architectural mechanics, protocol details, and edge cases.",
-    "code_and_benchmarks": "Incorporate concrete verified code patterns and quantitative benchmark comparisons.",
-    "structure_compliance": "Adhere strictly to the required section structure and target word count quotas.",
+    "user_criteria": "Directly address the user's specific objective, format, and core criteria.",
+    "article_depth": "Deepen substantive and conceptual depth: expand explanations, nuances, and edge cases.",
+    "clarity": "Improve structure and clarity: ensure coherent organization, logical flow, and clean formatting.",
+    "references_present": "Ground content with authoritative references, data sources, citations, or concrete examples.",
+    "human_readability": "Enhance human readability: write natural, engaging, professional prose that communicates concepts effortlessly.",
 }
 
 
@@ -40,9 +41,10 @@ def _heuristic_quality_eval(
         composite_score=round(ratio, 4),
         dimension_scores={
             "user_criteria": round(ratio, 4),
-            "technical_depth": round(ratio, 4),
-            "code_and_benchmarks": round(ratio, 4),
-            "structure_compliance": round(ratio, 4),
+            "article_depth": round(ratio, 4),
+            "clarity": round(ratio, 4),
+            "references_present": round(ratio, 4),
+            "human_readability": round(ratio, 4),
         },
         critique="" if passed else "Expand technical substance and ensure mandatory section completeness.",
     )
@@ -79,26 +81,32 @@ async def evaluate_report_quality(
         questions = {
             "user_criteria": Noul(
                 instructions=(
-                    f"Does this report thoroughly fulfill all user criteria for '{clean_topic}': '{criteria_str}'? "
+                    f"Does this report thoroughly fulfill all user criteria and intent for '{clean_topic}': '{criteria_str}'? "
                     "Return 1.0 for complete fulfillment, 0.0 for deficient."
                 )
             ),
-            "technical_depth": Noul(
+            "article_depth": Noul(
                 instructions=(
-                    "Does the report demonstrate rigorous architectural depth and concrete mechanics rather than generic prose? "
-                    "Return 1.0 for deep and rigorous, 0.0 for superficial."
+                    "Does the content demonstrate substantive depth, rigorous domain insights, and comprehensive coverage rather than superficial summaries? "
+                    "Return 1.0 for deep and thorough, 0.0 for superficial."
                 )
             ),
-            "code_and_benchmarks": Noul(
+            "clarity": Noul(
                 instructions=(
-                    "Does the report include concrete implementation patterns, verified code snippets, or quantitative benchmarks? "
-                    "Return 1.0 for strong evidence, 0.0 for missing."
+                    "Is the content cleanly organized, logically structured, easy to follow, and free of unnecessary fluff or premature truncation? "
+                    "Return 1.0 for high clarity, 0.0 for deficient."
                 )
             ),
-            "structure_compliance": Noul(
+            "references_present": Noul(
                 instructions=(
-                    "Does the report adhere to standard publication sections without fluff or premature truncation? "
-                    "Return 1.0 for compliant, 0.0 for deficient."
+                    "Does the report ground its findings in concrete citations, domain references, authoritative data sources, or real-world examples? "
+                    "Return 1.0 for well-grounded, 0.0 for ungrounded."
+                )
+            ),
+            "human_readability": Noul(
+                instructions=(
+                    "Is the report written in engaging, accessible, publication-grade prose that is natural, professional, and pleasant for a human to read rather than robotic or repetitive? "
+                    "Return 1.0 for highly readable, 0.0 for poor readability."
                 )
             ),
         }
@@ -111,15 +119,24 @@ async def evaluate_report_quality(
             else:
                 scores[dim] = 0.80
 
-        # Weighted calculation
+        # Weighted calculation prioritizing user criteria and substantive depth
         weights = {
             "user_criteria": 0.35,
-            "technical_depth": 0.25,
-            "code_and_benchmarks": 0.20,
-            "structure_compliance": 0.20,
+            "article_depth": 0.25,
+            "clarity": 0.15,
+            "human_readability": 0.15,
+            "references_present": 0.10,
         }
         composite = round(sum(scores.get(d, 0.0) * w for d, w in weights.items()), 4)
         passed = composite >= threshold
+        logger.info(
+            "[TypeSafe JEV Quality] Evaluated '%s': composite=%.2f (threshold=%.2f, passed=%s) | scores=%s",
+            clean_topic,
+            composite,
+            threshold,
+            passed,
+            scores,
+        )
 
         critique = ""
         if not passed:

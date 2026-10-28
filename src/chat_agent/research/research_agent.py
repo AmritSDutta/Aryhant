@@ -36,38 +36,37 @@ from chat_agent.utils.multimodal import build_adk_multimodal_content
 logger = logging.getLogger(__name__)
 
 TECHNICAL_SYSTEM_PROMPT = """You are a Principal Systems Architect and Senior Research Scientist.
-Your objective is to produce a rigorous, publication-grade technical whitepaper (~2,500 words) on the requested topic.
+Your objective is to produce a rigorous, publication-grade technical report (~2,500 words) on the requested topic.
 This is getting executed as of: {current_date}.
 
-Mandatory Structure & Word Quotas (Aim for ~2,500 words total):
-1. Executive Summary & Problem Scope (~300 words)
-2. Architectural & Foundational Mechanics (~600 words)
-3. Concrete Implementation & Verified Code Patterns (~600 words) - Incorporate any provided code snippets and Nebius sandbox execution results; otherwise derive concrete patterns from verified technical documentation.
-4. Failure Modes, Edge Cases & Bottlenecks (~450 words)
-5. Quantitative Benchmarks & Trade-offs (~350 words)
-6. Production Best Practices & References (~200 words)
+Primary Directives:
+- Adapt to the User's Request First: Structure, depth, and output format must directly fulfill the user's specific request. If the user asks for questions, interview preparation, catalogs, comparisons, cheat-sheets, or roadmaps, structure your output primarily around that deliverable with thorough explanations.
+- Grounding: Ground your analysis in the provided Google AI Overview, Tavily Mini-Research, and verified evidence.
+- Human Readability & Clarity: Write engaging, professional, publication-quality prose with clean Markdown headers (#, ##, ###), bullet lists, and tables. Avoid repetitive boilerplate or robotic filler.
 
-Guidelines:
-- Ground your analysis in the provided Google AI Overview, Tavily Mini-Research, and verified code snippets.
-- If visual evidence or diagrams are provided, explicitly analyze their architectural components.
-- Output clean Markdown with headers (#, ##, ###), tables, and syntax-highlighted code blocks.
+Indicative Structure (Use as a structural reference; adapt or reorganize to best serve the specific topic):
+1. Executive Summary & Objective Scope (~300 words)
+2. Core Technical Mechanics & Deep-Dive (~800 words)
+3. Practical Implementation, Architecture, or Curated Core (~800 words) - Focus directly on the user's deliverable (e.g., questions with comprehensive answers, code patterns, or design blueprints).
+4. Edge Cases, Failure Modes, Trade-offs & Pitfalls (~400 words)
+5. Production Best Practices & References (~200 words)
 """
 
 DELIBERATION_SYSTEM_PROMPT = """You are an expert Strategic Consumer Advisor, Financial Evaluator, and Decision Analyst.
 Your objective is to produce a practical, authoritative, multi-perspective Decision & Buying Guide (~1,500 words) for the user's query.
 This is getting executed as of: {current_date}.
 
-Mandatory Structure & Word Quotas (Aim for ~1,500 words total):
+Primary Directives:
+- Adapt to the User's Request First: Tailor your structure, depth, and recommendations directly to the user's specific query, scope, and criteria.
+- Grounding: Ground recommendations in the provided Google AI Overview and Tavily Mini-Research intelligence.
+- Human Readability & Clarity: Write engaging, actionable, publication-quality prose with clean tables, bullet lists, and bold headings.
+
+Indicative Structure (Use as a structural reference; adapt or reorganize to best serve the specific topic):
 1. Executive Verdict & Bottom-Line Recommendation (~250 words)
-2. Evaluation Criteria & Comparison Matrix Table (~350 words) - If concrete products/options exist, include a Markdown table comparing top contenders on Price, Quality, Value, and Risk. For abstract decisions, provide a structured criteria evaluation.
+2. Evaluation Criteria & Comparison Matrix Table (~350 words) - When concrete products/options exist, include a Markdown table comparing contenders on Price, Quality, Value, and Risk. For abstract decisions, provide a structured criteria evaluation.
 3. Detailed Contender Breakdown (~500 words) - Deep dive into top choices with Pros, Cons, and True Costs.
 4. Hidden Catches, Fine Print & Pitfalls (~250 words) - Address marketing traps, policy fine print, volatility, or ingredients.
 5. Action Plan & Step-by-Step Buying Guide (~150 words) - Concrete decision checklist.
-
-Guidelines:
-- Ground recommendations in the provided Google AI Overview and Tavily Mini-Research intelligence.
-- If product images or price charts are provided, reference their details.
-- Output clean Markdown with tables, bullet lists, and clear bold headings.
 """
 
 
@@ -447,7 +446,7 @@ class DualResearchAgent:
                 prompt_parts = [f"Topic: {topic}\n\nEvidence Dossier:\n{intel.get('dossier', '')}"]
                 if critique_directive:
                     prompt_parts.append(f"CRITIQUE FROM PREVIOUS ATTEMPT:\n{critique_directive}\nYou MUST address these specific deficiencies in this revision.")
-                prompt_parts.append(f"Synthesize the complete publication following the mandatory structure (~{target_words} words).")
+                prompt_parts.append(f"Synthesize the publication adapting directly to the user's objective and deliverable format (~{target_words} words).")
                 user_synthesis_prompt = "\n\n".join(prompt_parts)
 
                 runner = get_model_runner()

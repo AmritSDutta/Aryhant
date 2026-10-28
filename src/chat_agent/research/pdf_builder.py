@@ -147,7 +147,7 @@ class PublicationCanvas(canvas.Canvas):
                 except Exception:
                     pass
             self.drawString(start_x, 792 - 24, header_text)
-            self.drawString(36, 792 - 24, header_text)
+
             self.setStrokeColor(colors.HexColor("#CBD5E1"))
             self.setLineWidth(0.5)
             self.line(36, 792 - 28, 612 - 36, 792 - 28)

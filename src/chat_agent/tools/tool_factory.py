@@ -1,6 +1,7 @@
 """Tool Factory for managing LLM tool bindings, web search tool pool, and provider functions."""
 
 import abc
+from datetime import datetime, timedelta, timezone
 import logging
 import random
 import re
@@ -522,13 +523,19 @@ class WebSearchToolPool:
             else:
                 candidate_tools = self._get_weighted_shuffled_candidates(configured_tools)
 
+        clean_query = query.strip()
+        current_date = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5, minutes=30))).strftime('%B %Y')
+        dated_query = f'As of {current_date}, {clean_query}' if clean_query and not clean_query.lower().startswith(
+            'as of') else clean_query
+
         errors = []
         for tool in candidate_tools:
             logger.info("[Search Tool] Candidate selected: '%s'", tool.name)
             try:
-                res = tool.search(query=query, max_results=max_results, **kwargs)
+                res = tool.search(query=dated_query, max_results=max_results, **kwargs)
                 if res.answer == "tavily failed try with some other websearch" and not res.results:
-                    logger.info("[Search Tool] Failover: '%s' failed (%s). Trying next candidate...", tool.name, res.answer)
+                    logger.info("[Search Tool] Failover: '%s' failed (%s). Trying next candidate...", tool.name,
+                                res.answer)
                     errors.append(f"{tool.name}: {res.answer}")
                     continue
                 self.call_counts[tool.name] = self.call_counts.get(tool.name, 0) + 1
@@ -548,6 +555,24 @@ class WebSearchToolPool:
             raw_response={"errors": errors},
         )
 
+    async def search_async(
+            self,
+            query: str,
+            provider: Optional[Union[str, SearchProvider]] = None,
+            max_results: int = 10,
+            **kwargs: Any,
+    ) -> NormalizedSearchResponse:
+        """Search the web asynchronously in a background worker thread."""
+        import asyncio
+
+        return await asyncio.to_thread(
+            self.search,
+            query=query,
+            provider=provider,
+            max_results=max_results,
+            **kwargs,
+        )
+
 
 _tool_pool: Optional[WebSearchToolPool] = None
 
@@ -561,10 +586,10 @@ def get_search_pool() -> WebSearchToolPool:
 
 
 def search_web(
-    query: str,
-    provider: Optional[Union[str, SearchProvider]] = None,
-    max_results: int = 10,
-    **kwargs,
+        query: str,
+        provider: Optional[Union[str, SearchProvider]] = None,
+        max_results: int = 10,
+        **kwargs,
 ) -> dict[str, Any]:
     """Search the web for real-time information, research, curriculum questions, and current news."""
     pool = get_search_pool()
@@ -646,15 +671,15 @@ def get_current_time() -> dict:
 
 
 def _generate_study_notes_pdf_sync(
-    title: str,
-    content: str,
-    subject: str = "Science",
-    tags: Optional[List[str]] = None,
-    visual: str = "science",
-    margin_tip: str = "",
-    channel: Optional[str] = None,
-    thread_ts: Optional[str] = None,
-    output_path: Optional[str] = None,
+        title: str,
+        content: str,
+        subject: str = "Science",
+        tags: Optional[List[str]] = None,
+        visual: str = "science",
+        margin_tip: str = "",
+        channel: Optional[str] = None,
+        thread_ts: Optional[str] = None,
+        output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compile the study notes PDF and auto-upload to Slack; executed on a background thread."""
     import os
@@ -709,15 +734,15 @@ def _generate_study_notes_pdf_sync(
 
 
 def generate_study_notes_pdf(
-    title: str,
-    content: str,
-    subject: str = "Science",
-    tags: Optional[List[str]] = None,
-    visual: str = "science",
-    margin_tip: str = "",
-    channel: Optional[str] = None,
-    thread_ts: Optional[str] = None,
-    output_path: Optional[str] = None,
+        title: str,
+        content: str,
+        subject: str = "Science",
+        tags: Optional[List[str]] = None,
+        visual: str = "science",
+        margin_tip: str = "",
+        channel: Optional[str] = None,
+        thread_ts: Optional[str] = None,
+        output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Queue study notes PDF compilation and Slack delivery on a background thread;
@@ -740,10 +765,10 @@ def generate_study_notes_pdf(
 
 
 def _generate_infographic_pdf_sync(
-    lesson_data: Dict[str, Any],
-    channel: Optional[str] = None,
-    thread_ts: Optional[str] = None,
-    output_path: Optional[str] = None,
+        lesson_data: Dict[str, Any],
+        channel: Optional[str] = None,
+        thread_ts: Optional[str] = None,
+        output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compile the lesson infographic PDF and auto-upload to Slack; executed on a background thread."""
     import os
@@ -792,10 +817,10 @@ def _generate_infographic_pdf_sync(
 
 
 def generate_infographic_pdf(
-    lesson_data: Dict[str, Any],
-    channel: Optional[str] = None,
-    thread_ts: Optional[str] = None,
-    output_path: Optional[str] = None,
+        lesson_data: Dict[str, Any],
+        channel: Optional[str] = None,
+        thread_ts: Optional[str] = None,
+        output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Queue lesson infographic PDF compilation and Slack delivery on a background thread;
@@ -851,12 +876,12 @@ def _normalize_thread_ts(thread_ts: Any) -> str:
 
 
 def _upload_file_to_slack_sync(
-    file_path: str,
-    channel: str,
-    thread_ts: str,
-    title: str,
-    initial_comment: str,
-    token: str,
+        file_path: str,
+        channel: str,
+        thread_ts: str,
+        title: str,
+        initial_comment: str,
+        token: str,
 ) -> Dict[str, Any]:
     """Run the blocking 3-step Slack external upload; executed on a background thread."""
     import os
@@ -944,11 +969,11 @@ def _upload_file_to_slack_sync(
 
 
 def upload_file_to_slack(
-    file_path: str,
-    channel: str = "",
-    thread_ts: str = "",
-    title: str = "",
-    initial_comment: str = "",
+        file_path: str,
+        channel: str = "",
+        thread_ts: str = "",
+        title: str = "",
+        initial_comment: str = "",
 ) -> Dict[str, Any]:
     """
     Queue upload of a local file (e.g. PDF study notes) to a Slack thread

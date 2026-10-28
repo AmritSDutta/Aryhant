@@ -34,7 +34,7 @@ flowchart TD
   end
   subgraph ScopeIntake["3. Scope & Grace Window"]
     direction TB
-    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Card - 30s Grace Window"]
+    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Card - 20s Grace Window"]
     ScopeNotice -->|Auto-proceed or timeout| Checkpoint["Redis Store: find_active_job"]
     ScopeCheck -->|Clear Scope| Checkpoint
   end
@@ -99,7 +99,7 @@ Before allocating compute or querying external APIs, topics undergo dual-layer p
 ### 2. Scope Clarification Grace Window (`intake.py`)
 - **Scope Formulation**: Analyzes the topic and generates target audiences, focus areas, and explicit success criteria.
 - **Clarity Detection**: Evaluates query specificity via `is_clear_scope(topic, has_attachments)` with stop-word filtering.
-- **Grace Window**: Clear technical queries proceed instantly. Ambiguous or multi-clause topics post an informational scope card and wait 30 seconds before auto-proceeding with the inferred scope. Resumed jobs skip the wait entirely.
+- **Grace Window**: Clear technical queries proceed instantly. Ambiguous or multi-clause topics post an informational scope card and wait 20 seconds before auto-proceeding with the inferred scope. Resumed jobs skip the wait entirely.
 
 ### 3. 24-Hour Checkpoint Resiliency (`redis_research_store.py`)
 - **Secondary Indexing**: Active jobs are indexed under `aryhant:active_job:thread:<channel_id>:<thread_ts>` and `aryhant:active_job:user:<user_id>:<topic_hash>`.

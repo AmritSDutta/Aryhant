@@ -85,7 +85,7 @@ def formulate_scope(
     }
 
 
-def render_scope_notice(scope_data: dict[str, Any], wait_sec: int = 30) -> str:
+def render_scope_notice(scope_data: dict[str, Any], wait_sec: int = 20) -> str:
     """Render Slack mrkdwn summary card with informational review grace window."""
     topic = scope_data.get("topic", "Topic")
     objective = scope_data.get("objective", "")

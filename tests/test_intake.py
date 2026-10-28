@@ -39,7 +39,7 @@ def test_formulate_scope_modes():
 def test_render_scope_notice():
     """Verify rendering of Slack informational scope notice."""
     scope = formulate_scope("Rust vs Go", ResearchMode.TECHNICAL)
-    rendered = render_scope_notice(scope, wait_sec=30)
+    rendered = render_scope_notice(scope, wait_sec=20)
     assert "*Research Scope & Criteria Formulated*" in rendered
     assert "Rust vs Go" in rendered
-    assert "30 seconds" in rendered
+    assert "20 seconds" in rendered

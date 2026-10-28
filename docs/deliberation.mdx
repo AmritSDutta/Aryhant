@@ -28,7 +28,7 @@ flowchart TD
   end
   subgraph ScopeIntake["3. Scope Formulation"]
     direction TB
-    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Notice - 30s Grace Window"]
+    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Notice - 20s Grace Window"]
     ScopeNotice -->|Auto-proceed or timeout| Checkpoint["Redis Store: find_active_job"]
     ScopeCheck -->|Clear Scope| Checkpoint
   end

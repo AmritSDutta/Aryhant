@@ -257,10 +257,10 @@ class DualResearchAgent:
 
             valid_images = [a for a in attachments if a[1].startswith("image/")]
             scope_data = formulate_scope(topic, mode)
-            # Only post 30s scope card if job is fresh (not resuming an in-progress job)
+            # Only post 20s scope card if job is fresh (not resuming an in-progress job)
             is_resumed = job is not None and job.checkpoint != "initial"
             if not is_resumed and not is_clear_scope(topic, bool(valid_images)):
-                notice = render_scope_notice(scope_data, wait_sec=30)
+                notice = render_scope_notice(scope_data, wait_sec=20)
                 target_thread = thread_ts or ""
                 if client and channel_id:
                     post_kw = {"channel": channel_id, "text": notice}
@@ -270,7 +270,7 @@ class DualResearchAgent:
                         await client.chat_postMessage(**post_kw)
                     except Exception:
                         pass
-                await asyncio.sleep(30)
+                await asyncio.sleep(20)
 
             if job is None:
                 job = ResearchJobState(

@@ -88,7 +88,7 @@ For students, parents, researchers, and engineers, Aryhant includes an autonomou
 - **Decision Synthesis**: Delivers a ~1,500-word Decision Guide PDF with a side-by-side Comparative Evaluation Matrix, contender breakdowns, hidden traps, and step-by-step buying actions.
 
 ### C. Key Research Safeguards & Resiliency
-1. **Scope Clarification Window**: If your research query is broad or ambiguous (e.g. single generic words), Aryhant posts an informational scope card and gives a **30-second grace period** before automatically proceeding with the inferred scope. Clear technical queries start immediately with 0 delay.
+1. **Scope Clarification Window**: If your research query is broad or ambiguous (e.g. single generic words), Aryhant posts an informational scope card and gives a **20-second grace period** before automatically proceeding with the inferred scope. Clear technical queries start immediately with 0 delay.
 2. **24-Hour Resilient Resume**: If a container restarts or your network drops mid-research, you don't lose progress. Asking again about the topic or continuing in the same thread automatically locates your job from Redis and resumes directly from the last checkpoint, reusing already-fetched intelligence.
 3. **Pre-flight Safety Screening**: Dual-layer screening protects against unauthorized access directives, exploits, or malicious code generation. Denials are politely explained and recorded for audit compliance.
 4. **Transparent Progress & `[INTERNAL]` Updates**: The research agent updates an interactive Slack TODO board in real time (`⬜` $\to$ `🔄` $\to$ `✅`) and posts intermediate notifications marked `[INTERNAL]` directly into the thread so you always know what phase is executing.

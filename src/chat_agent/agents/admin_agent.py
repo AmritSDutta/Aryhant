@@ -29,7 +29,7 @@ FORMAT CONSTRAINTS:
 - Summarize the entire audit inside a SINGLE Markdown Data Table rather than separate prose sections.
 - Accurately report all telemetry metrics without omission:
   * Executive Verdict & Operational Status (HEALTHY / ATTENTION REQUIRED)
-  * Data Retention & Pruning (Records purged older than 15 days, retention threshold)
+  * Data Retention & Pruning (Records purged older than 15 days, Slack files purged older than 30 days)
   * 7-Day Task Volume & Status Breakdown (Total tasks, completed, in-progress, created, failed)
   * Task Type Distribution (Chat, Research, Admin)
   * Execution Latency (Average duration in ms)
@@ -43,7 +43,7 @@ Mandatory Table Format:
 | Metric Category | Operational Telemetry & Health Data |
 | :--- | :--- |
 | **System Verdict** | [HEALTHY / ATTENTION REQUIRED] - [One-line summary] |
-| **Data Retention** | [X] records pruned (>15 days retention window) |
+| **Data Retention** | [X] records pruned (>15 days), [Y] Slack files pruned (>30 days) |
 | **Task Volume & Status** | Total: [N] (Completed: [C], In-Progress: [P], Failed: [F]) |
 | **Task Type Distribution** | [Type breakdown, e.g. Chat: X, Research: Y, Admin: Z] |
 | **Execution Latency** | Average: [X] ms |
@@ -95,6 +95,54 @@ ADMIN_TOOLS: list[dict[str, Any]] = [
 ]
 
 ADMIN_TOOLS_OPENAI = ADMIN_TOOLS  # Backward compatibility alias
+
+
+async def prune_slack_files_older_than(days: int = 30) -> int:
+    """Delete Slack files uploaded by the bot older than `days` using Slack API."""
+    token = getattr(settings, "aryhant_slack_bot_token", "") or getattr(settings, "ARYHANT_SLACK_BOT_TOKEN", "")
+    if not token:
+        logger.info("[Slack Pruner] Skipped Slack file pruning: bot token not configured.")
+        return 0
+    logger.info('Started pruning slack deposited old files')
+    cutoff_ts = int(time.time() - (days * 86400))
+    deleted_count = 0
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            headers = {"Authorization": f"Bearer {token}"}
+            resp = await client.get(
+                "https://slack.com/api/files.list",
+                headers=headers,
+                params={"ts_to": cutoff_ts, "count": 100},
+            )
+            data = resp.json()
+            if not data.get("ok"):
+                logger.warning("[Slack Pruner] files.list failed: %s", data.get("error"))
+                return 0
+
+            files = data.get("files") or []
+            for f in files:
+                fid = f.get("id")
+                if not fid:
+                    continue
+                del_resp = await client.post(
+                    "https://slack.com/api/files.delete",
+                    headers=headers,
+                    data={"file": fid},
+                )
+                del_data = del_resp.json()
+                if del_data.get("ok"):
+                    deleted_count += 1
+                else:
+                    logger.debug("[Slack Pruner] Failed to delete file %s: %s", fid, del_data.get("error"))
+
+            if deleted_count > 0:
+                logger.info("[Slack Pruner] Pruned %d Slack files older than %d days.", deleted_count, days)
+    except Exception as exc:
+        logger.warning("[Slack Pruner] Error pruning old Slack files: %s", exc)
+
+    return deleted_count
 
 
 def _sanitize_error_signature(raw_error: str | None) -> str:
@@ -300,6 +348,8 @@ class AdminAgent:
         self,
         messages: list[dict[str, str]],
         failure_count: int | None = None,
+        deleted_count: int = 0,
+        deleted_slack_files: int = 0,
     ) -> str:
         """Construct fallback report if external LLM completion fails or is offline."""
         prompt_text = "\n".join(m.get("content", "") for m in messages if m.get("role") != "system")
@@ -320,7 +370,7 @@ class AdminAgent:
             "| Metric Category | Operational Telemetry & Health Data |\n"
             "| :--- | :--- |\n"
             f"| **System Verdict** | {status_str} |\n"
-            "| **Data Retention** | Maintenance audit executed successfully (15-day retention window) |\n"
+            f"| **Data Retention** | {deleted_count} DB records pruned (>15d), {deleted_slack_files} Slack files pruned (>30d) |\n"
             f"| **Operational Telemetry** | Active window: 7 days |\n"
             f"| **Failure Diagnostics** | {failures} failure(s) recorded |\n"
             "| **Recommendations** | System operating nominally; continue regular automated pruning audits |\n"
@@ -333,7 +383,7 @@ class AdminAgent:
         provider: str | None = None,
         user_id: str = "admin",
     ) -> dict[str, Any]:
-        """Execute full administrative maintenance cycle: prune >15-day records, read 7-day metrics, and investigate failures with ADMIN_TOOLS."""
+        """Execute full administrative maintenance cycle: prune >15-day records, prune >30-day Slack files, read 7-day metrics, and investigate failures."""
         job_id = f"admin_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
         start_ts = time.monotonic()
         active_provider = (provider or getattr(settings, "MODEL_PROVIDER", "nebius")).lower()
@@ -350,8 +400,9 @@ class AdminAgent:
         )
 
         try:
-            # Step 2: Deterministic 15-day retention pruning
+            # Step 2: Deterministic retention pruning (15-day DB, 30-day Slack files)
             deleted_count = await self.task_service.adelete_records_older_than(days=prune_days)
+            deleted_slack_files = await prune_slack_files_older_than(days=30)
 
             # Step 3: Deterministic 7-day telemetry & recent failures
             metrics_7d = await self.task_service.aget_table_metrics(days=days)
@@ -373,6 +424,7 @@ class AdminAgent:
                 "telemetry_window_days": days,
                 "retention_prune_days": prune_days,
                 "deleted_records_count": deleted_count,
+                "deleted_slack_files_count": deleted_slack_files,
                 "current_active_tasks": metrics_7d.get("total_tasks", 0),
                 "status_breakdown": metrics_7d.get("status_breakdown", {}),
                 "task_type_breakdown": metrics_7d.get("task_type_breakdown", {}),
@@ -424,6 +476,7 @@ class AdminAgent:
                 model_name=active_model,
                 metadata={
                     "deleted_count": deleted_count,
+                    "deleted_slack_files": deleted_slack_files,
                     "retention_days": prune_days,
                     "telemetry_days": days,
                     "provider": active_provider,
@@ -431,7 +484,7 @@ class AdminAgent:
             )
 
             logger.info(
-                "✅ Admin maintenance job %s completed successfully in %d ms (model=%s, tokens: prompt=%d completion=%d total=%d, pruned %d records, status=success)",
+                "✅ Admin maintenance job %s completed successfully in %d ms (model=%s, tokens: prompt=%d completion=%d total=%d, pruned %d DB records, pruned %d Slack files, status=success)",
                 job_id,
                 duration_ms,
                 active_model,
@@ -439,6 +492,7 @@ class AdminAgent:
                 tokens.get("completion", 0),
                 tokens.get("total", 0),
                 deleted_count,
+                deleted_slack_files,
             )
 
             return {
@@ -446,6 +500,7 @@ class AdminAgent:
                 "job_id": job_id,
                 "report": report,
                 "deleted_count": deleted_count,
+                "deleted_slack_files": deleted_slack_files,
                 "metrics": metrics_7d,
                 "duration_ms": duration_ms,
             }
@@ -468,6 +523,7 @@ class AdminAgent:
                 "error": str(exc),
                 "report": f"⚠️ Administrative maintenance failed: {exc}",
                 "deleted_count": 0,
+                "deleted_slack_files": 0,
             }
 
 

@@ -253,3 +253,33 @@ async def test_admin_agent_nebius_tool_dispatch_loop(mock_db_service: SessionTas
         assert tokens["total"] == 145  # 55 + 90
         assert mock_client.chat.completions.create.call_count == 2
 
+
+
+@pytest.mark.asyncio
+async def test_prune_slack_files_older_than() -> None:
+    """Verify that prune_slack_files_older_than lists and deletes files older than cutoff."""
+    from chat_agent.agents.admin_agent import prune_slack_files_older_than
+    from unittest.mock import MagicMock
+
+    mock_resp_list = MagicMock()
+    mock_resp_list.json.return_value = {
+        "ok": True,
+        "files": [{"id": "F12345"}, {"id": "F67890"}],
+    }
+
+    mock_resp_del = MagicMock()
+    mock_resp_del.json.return_value = {"ok": True}
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_resp_list
+    mock_client.post.return_value = mock_resp_del
+
+    with patch("chat_agent.agents.admin_agent.settings") as mock_settings, patch(
+        "httpx.AsyncClient"
+    ) as mock_httpx_cls:
+        mock_settings.aryhant_slack_bot_token = "xoxb-mock-token"
+        mock_httpx_cls.return_value.__aenter__.return_value = mock_client
+
+        deleted = await prune_slack_files_older_than(days=30)
+        assert deleted == 2
+        assert mock_client.post.call_count == 2

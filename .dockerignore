@@ -1,0 +1,73 @@
+# Version Control & CI/CD
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.crt
+service-account*.json
+credentials*.json
+*client_secret*.json
+
+# Frontend & Node Artifacts (Static SPA deployed to Cloudflare Pages)
+ui/node_modules/
+ui/dist/
+node_modules/
+
+# Python Virtual Environments & Build Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Testing, Linting & Coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local Databases & State
+*.db
+*.db-shm
+*.db-wal
+*.db-info
+aryhant.db
+test_libsql_temp.db
+
+# Documentation & Specifications (Hosted via docs7 / Cloudflare)
+docs/
+*.md
+
+# AI Tooling & Editors
+.claude/
+.gemini/
+.opencode/
+.antigravity/
+.idea/
+.vscode/
+
+# Logs & Temporary Files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.temp
+**/.DS_Store
+**/Thumbs.db

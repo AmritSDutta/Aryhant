@@ -45,6 +45,29 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_user_kind ON memories(user_id, kind);
 CREATE INDEX IF NOT EXISTS idx_memories_user_weight ON memories(user_id, weight DESC, last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS session_tasks (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
+    task_type TEXT NOT NULL,
+    provider TEXT,
+    status TEXT DEFAULT 'created',
+    model_name TEXT,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    metadata TEXT,
+    created_at INTEGER NOT NULL,
+    completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_tasks_session ON session_tasks(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_tasks_user ON session_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_session_tasks_type ON session_tasks(task_type);
+CREATE INDEX IF NOT EXISTS idx_session_tasks_created ON session_tasks(created_at DESC);
 """
 
 

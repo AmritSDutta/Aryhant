@@ -44,13 +44,17 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 ├── docs/                           # docs7 documentation site (docs.json, *.mdx)
 ├── proxies/                        # Edge proxies (Cloudflare Worker Slack ACK & QStash forwarder)
 ├── src/chat_agent/                 # Primary application package
-│   ├── agents/                     # Aryhant persona, system prompts, question generator, LLM runners
+│   ├── agents/                     # Aryhant persona, prompts, question generator, runners, admin
+│   │   ├── admin_agent.py          # Role 4: Autonomous administrative auditor (15d prune, 7d metrics, tools)
 │   │   ├── gemini_model_runner.py  # Direct Gemini model runner (3x retries, OpenAI fallback, tool loops)
 │   │   ├── model_runner.py         # ModelRunner Protocol & get_model_runner() factory
 │   │   ├── nebius_model_runner.py  # Nebius OpenAI-compatible model runner
 │   │   ├── prompt.py               # Persona & ICSE Grade 5 pedagogical system instructions
 │   │   ├── question_generator.py   # Practice question generator agent (facade)
 │   │   └── runner.py               # Orchestrator: text clipping, multimodal validation, model delegation
+│   ├── research/                   # Role 3: Deep research agent and whitepaper generation
+│   │   ├── deep_research.py        # Recursive research graph execution
+│   │   └── research_agent.py       # Research orchestrator with session_tasks lifecycle tracking
 │   ├── config/                     # Settings, Auth0, rate limiting, QStash auth, logging, Grafana
 │   ├── infographics/               # ReportLab PDF builders (study notes, infographics, diagrams, theme)
 │   │   ├── builder.py              # Lesson infographic posters
@@ -65,19 +69,38 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   │   ├── nebius_question_generator.py # Nebius OpenAI-compatible question generator
 │   │   └── __init__.py             # Factory & curation pipeline
 │   ├── schema/                     # Pydantic schemas and data models
+│   ├── services/                   # Redis session store, Turso memory service, SessionTaskService
+│   │   ├── redis_session_store.py  # Tier 1: 20-turn sliding window conversation history
+│   │   ├── turso_memory_service.py # Tier 2: Relational memory & learning preferences
+│   │   └── session_task_service.py # Tier 2: Persistent session_tasks lifecycle & operational metrics
 │   ├── slack/                      # Slack Bolt Socket Mode, HTTP events API, Block Kit formatting
 │   ├── tools/                      # Agent tools (web search, PDF generators, Slack uploader, time)
 │   ├── utils/                      # Input validation, math formatter, multimodal, fast decision
 │   ├── app.py                      # FastAPI server (/api/chat, /api/health, /webhooks/*)
 │   ├── main.py                     # CLI entry point (serve, chat, slack subcommands)
 │   └── webhooks.py                 # Webhook authentication & endpoints
-├── tests/                          # Hermetic test suite with mocked external services (145 tests)
+├── tests/                          # Hermetic test suite with mocked external services (180 tests)
 ├── .github/workflows/ci.yml        # GitHub Actions CI (ruff non-blocking, pytest blocking)
 ├── Dockerfile                      # Production container image definition
 └── pyproject.toml                  # Project metadata, dependencies, and pytest configuration
 ```
 
 ## Architecture
+
+## Four-Role Agent Architecture
+
+1. **Role 1: Primary Chat & ICSE Pedagogical Companion** (src/chat_agent/agents/runner.py, prompt.py)
+   - Handles everyday conversations, multi-turn dialogue, multimodal attachments, and St. Xavier Grade 5 ICSE syllabus guidance.
+2. **Role 2: Practice Question Generator & Evaluator** (src/chat_agent/question_generator/)
+   - Structured generation of 15-20 questions/hints with TypeSafe AI System One (Noul) top-10 curation.
+3. **Role 3: Deep Technical Research & Deliberation** (src/chat_agent/research/research_agent.py)
+   - Multi-source technical whitepaper generation and decision trade-off analysis, reporting lifecycle hooks into session_tasks.
+4. **Role 4: Autonomous Administrative & Telemetry Auditor** (src/chat_agent/agents/admin_agent.py)
+   - Deterministic 15-day data retention pruning (delete_records_older_than(15)).
+   - 7-day operational telemetry aggregation (get_table_metrics(7)).
+   - Failure diagnostics via ADMIN_TOOLS (search_context7, search_web) and multi-turn Nebius/Gemini dispatch.
+   - Triggered via Slack /admin, /audit, or app mentions.
+
 
 Direct Google GenAI, Nebius & OpenAI model execution engine behind every channel:
 

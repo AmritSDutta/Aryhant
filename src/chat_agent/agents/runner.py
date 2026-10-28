@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from google.genai import types
@@ -8,6 +9,8 @@ from chat_agent.agents.model_runner import get_model_runner
 from chat_agent.config import settings
 
 logger = logging.getLogger(__name__)
+
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def clip_text(text: str, limit: int | None = None) -> str:
@@ -28,6 +31,22 @@ async def run_agent(
     user_memory_context: str | None = None,
 ) -> str:
     """Execute the configured model runner asynchronously with text and optional attachments."""
+    try:
+        from chat_agent.services.session_task_service import get_session_task_service
+
+        reg_task = asyncio.create_task(
+            get_session_task_service().acreate_task(
+                session_id=session_id,
+                user_id=user_id,
+                task_type="chat",
+                provider=getattr(settings, "MODEL_PROVIDER", "gemini"),
+            )
+        )
+        _BACKGROUND_TASKS.add(reg_task)
+        reg_task.add_done_callback(_BACKGROUND_TASKS.discard)
+    except Exception as exc:
+        logger.warning("Failed to schedule chat session task registration: %s", exc)
+
     if custom_content is not None:
         content = custom_content
     else:

@@ -139,7 +139,23 @@ Students and teachers can inspect and manage what Aryhant remembers about their 
 
 See [Turso memory and preferences](/turso-memory-preferences) for complete architecture, schema details, and manual Slack testing guides.
 
-## 7. Access Control & User Email Whitelist (`ARYHANT_ALLOWED_EMAILS`)
+## 7. Administrative & Telemetry Audit (`/admin`, `/audit`)
+
+Authorized workspace members and operators can trigger autonomous system health audits and data hygiene maintenance using `/admin` or `/audit`:
+
+- **Instant Acknowledgment**: Slack slash commands must acknowledge receipt within 3 seconds. The handler immediately returns an ephemeral confirmation:
+  > *"Running system audit and operational maintenance..."*
+- **Background Execution**: A background task executes `AdminAgent.run(job_id, ...)`:
+  1. Purges session task records older than 15 days (`SessionTaskService.delete_records_older_than(15)`).
+  2. Aggregates 7-day operational telemetry metrics (`SessionTaskService.get_table_metrics(7)`).
+  3. Diagnoses recent failures using `search_context7` and `search_web`.
+  4. Sanitizes error signatures and absolute paths.
+  5. Posts the audit report directly to the channel or invocation context.
+- **Natural Language Triggers**: The auditor can also be triggered via app mentions containing phrases like `@Aryhant system health` or `@Aryhant audit system`.
+
+See [Administrative & Operations Auditor](/admin-agent) for full technical architecture and tool calling mechanics.
+
+## 8. Access Control & User Email Whitelist (`ARYHANT_ALLOWED_EMAILS`)
 
 To restrict who can interact with the Slack bot and prevent unauthorized token consumption:
 

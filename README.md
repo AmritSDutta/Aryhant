@@ -22,6 +22,7 @@ A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email,
 | Email | IMAP unread-message polling and SMTP replies |
 | Conversation State (Tier 1) | Private Upstash Redis with strict `aryhant:` prefix enforcement, 20-turn sliding window (`LTRIM`), and 24-hour TTL |
 | Personal Memory & Skills (Tier 2) | Remote Turso (libSQL) long-term memory engine with multi-script tokenization (English, Hindi, Bengali), user email persistence, and interactive `/preferences` Slack modal |
+| Autonomous Telemetry & Data Hygiene (Role 4) | Autonomous AdminAgent running deterministic 15-day retention pruning, 7-day metric aggregation, and Context7 / web failure diagnostics via /admin and /audit |
 
 ## Recommended cloud architecture
 
@@ -163,6 +164,7 @@ tests/                   pytest hermetic test suite
 | Environment configuration | [Config](src/chat_agent/config/settings.py) |
 | Upstash Redis session store (`aryhant:` prefix) | [Redis Store](src/chat_agent/services/redis_session_store.py) |
 | Turso libSQL personal memory & skills engine | [Turso Memory](src/chat_agent/services/turso_memory_service.py) |
+| Autonomous Admin & Session Task Service | [Admin Agent](src/chat_agent/agents/admin_agent.py), [Session Tasks](src/chat_agent/services/session_task_service.py) |
 | Local CLI | [Main](src/chat_agent/main.py) |
 | Slack Socket Mode (Slack Bolt) / HTTP | [Socket integration](src/chat_agent/slack/slack_app.py), [HTTP handler](src/chat_agent/slack/slack_http.py) |
 | Slack Block Kit generator | [Post generator](src/chat_agent/slack/post_generator.py) |

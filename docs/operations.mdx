@@ -141,7 +141,20 @@ gcloud run deploy aryhant \
 
 ---
 
-## 5. Cost Controls
+## 5. Automated Data Hygiene & Operations Auditing
+
+Aryhant includes automated operational telemetry tracking and data lifecycle hygiene:
+
+- **15-Day Data Retention Policy**: The session_tasks table records all background operations (e.g. Deep Research tasks). Records older than 15 days are automatically pruned during admin audits to minimize database storage and enforce privacy standards.
+- **7-Day Telemetry Audits**: Operators can inspect execution volume, success/failure counts, and diagnostic failure signatures by running /admin or /audit in Slack.
+- **Hermetic Testing**: The test suite covers all database fallback paths and tool dispatch loops with hermetic unit tests:
+  `powershell
+  python -m pytest -q
+  `
+
+---
+
+## 6. Cost Controls
 
 - **Low-Cost Model**: Primary inference runs on `gemini-flash-lite-latest` with `MAX_OUTPUT_TOKENS=8000`.
 - **Fast-Path Moderation**: `IS_GEMINI_MODERATION_ENOUGH=true` bypasses external moderation API costs by leveraging native Gemini safety filters.

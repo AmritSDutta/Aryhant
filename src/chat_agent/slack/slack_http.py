@@ -207,6 +207,49 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
             new_job_id,
             parse_research_trigger,
         )
+        if raw_text.startswith(("/admin", "/audit")):
+            from chat_agent.slack.slack_auth import check_slack_authorization
+            is_allowed, _, _, email = await check_slack_authorization(
+                client=client_adapter,
+                user_id=user,
+                channel=channel,
+                thread_ts=thread_ts or msg_ts,
+                notify_on_deny=True,
+            )
+            if not is_allowed:
+                logger.warning("Access denied in Slack HTTP handler for admin user %s (email: %r)", user, email)
+                return {"ok": False, "error": "unauthorized"}
+
+            from chat_agent.agents.admin_agent import get_admin_agent
+
+            ack_msg = await post_slack_message(
+                channel=channel,
+                thread_ts=thread_ts or msg_ts,
+                text="⏳ *Running administrative audit & data retention maintenance...*",
+            )
+            target_thread = thread_ts or msg_ts
+
+            async def _run_http_admin() -> None:
+                try:
+                    report_data = await get_admin_agent().run_maintenance(days=7, prune_days=15, user_id=user_id_key)
+                    await post_slack_message(
+                        channel=channel,
+                        thread_ts=target_thread,
+                        text=report_data.get("report", "Administrative maintenance finished."),
+                    )
+                except Exception as e_adm:
+                    logger.error("Slack HTTP admin maintenance failed: %s", e_adm, exc_info=True)
+                    await post_slack_message(
+                        channel=channel,
+                        thread_ts=target_thread,
+                        text=f"⚠️ Administrative maintenance failed: {e_adm}",
+                    )
+
+            adm_task = asyncio.create_task(_run_http_admin())
+            _BACKGROUND_TASKS.add(adm_task)
+            adm_task.add_done_callback(_BACKGROUND_TASKS.discard)
+            return {"ok": True}
+
         trigger = parse_research_trigger(raw_text)
         if trigger:
             cmd, req_topic = trigger

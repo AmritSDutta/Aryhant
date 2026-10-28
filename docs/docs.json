@@ -17,7 +17,7 @@
       { "group": "Memory & State", "pages": ["redis-session-history", "turso-memory-preferences"] },
       { "group": "Research & Deliberation", "pages": ["technical-research", "deliberation"] },
 
-      { "group": "Operations & Deployment", "pages": ["operations", "deployment"] },
+      { "group": "Operations & Deployment", "pages": ["admin-agent", "operations", "deployment"] },
       { "group": "Troubleshooting", "pages": ["faq"] }
     ]
   }

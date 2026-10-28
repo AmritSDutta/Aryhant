@@ -244,6 +244,37 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
         new_job_id,
         parse_research_trigger,
     )
+    if text.strip().startswith(("/admin", "/audit")):
+        from chat_agent.agents.admin_agent import get_admin_agent
+
+        ack_msg = await app.client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts or msg_ts,
+            text="⏳ *Running administrative audit & data retention maintenance...*",
+        )
+        target_thread = thread_ts or msg_ts
+
+        async def _run_slack_admin() -> None:
+            try:
+                report_data = await get_admin_agent().run_maintenance(days=7, prune_days=15, user_id=user_id_key)
+                await app.client.chat_postMessage(
+                    channel=channel,
+                    thread_ts=target_thread,
+                    text=report_data.get("report", "Administrative maintenance finished."),
+                )
+            except Exception as e_adm:
+                logger.error("Slack admin maintenance background job failed: %s", e_adm, exc_info=True)
+                await app.client.chat_postMessage(
+                    channel=channel,
+                    thread_ts=target_thread,
+                    text=f"⚠️ Administrative maintenance failed: {e_adm}",
+                )
+
+        adm_task = asyncio.create_task(_run_slack_admin())
+        _BACKGROUND_TASKS.add(adm_task)
+        adm_task.add_done_callback(_BACKGROUND_TASKS.discard)
+        return
+
     trigger = parse_research_trigger(text)
     if trigger:
         cmd, req_topic = trigger

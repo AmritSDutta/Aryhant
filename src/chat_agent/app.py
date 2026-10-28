@@ -124,6 +124,7 @@ async def chat(
     return ChatResponse(reply=reply, model=settings.model, channel=payload.channel)
 
 
+
 @app.post("/webhooks/slack", response_model=None)
 async def slack_events(request: Request, background_tasks: BackgroundTasks) -> dict | JSONResponse:
     body = await request.body()

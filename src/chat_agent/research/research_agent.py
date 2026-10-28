@@ -233,6 +233,20 @@ class DualResearchAgent:
             logger.warning("Failed to post initial Slack status board: %s", post_err)
 
         await self.store.save_job(job)
+        start_ts_ms = int(time.time() * 1000)
+        try:
+            from chat_agent.services.session_task_service import get_session_task_service
+
+            await get_session_task_service().acreate_task(
+                task_id=job_id,
+                session_id=job_id,
+                user_id=user_id,
+                task_type="research" if is_tech else "deliberate",
+                provider=getattr(settings, "MODEL_PROVIDER", "nebius"),
+                status="in_progress",
+            )
+        except Exception as reg_err:
+            logger.warning("Failed to register research session task %s: %s", job_id, reg_err)
 
         async def _update_slack(task_id: str, status: TaskStatus, details: str = "") -> None:
             updated_job = await self.store.update_todo_status(job_id, task_id, status, details, existing_job=job)
@@ -419,6 +433,33 @@ class DualResearchAgent:
                     pass
         finally:
             await release_user_job_slot(user_id)
+            try:
+                from chat_agent.services.session_task_service import get_session_task_service
+
+                duration_ms = int(time.time() * 1000) - start_ts_ms
+                final_status = "completed" if job.status == TaskStatus.COMPLETED else "failed"
+                tot_in = job.token_economics.total_input_tokens if job.token_economics else 0
+                tot_out = job.token_economics.total_output_tokens if job.token_economics else 0
+                tot_all = job.token_economics.total_tokens if job.token_economics else 0
+                active_prov = getattr(settings, "MODEL_PROVIDER", "nebius").lower()
+                active_model = (
+                    getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
+                    if active_prov == "nebius"
+                    else getattr(settings, "model", "gemini-flash-lite-latest")
+                )
+                await get_session_task_service().acomplete_task(
+                    task_id=job_id,
+                    status=final_status,
+                    prompt_tokens=tot_in,
+                    completion_tokens=tot_out,
+                    total_tokens=tot_all,
+                    duration_ms=duration_ms,
+                    model_name=active_model,
+                    error_message=job.error or None,
+                    metadata={"topic": topic, "word_count": job.word_count},
+                )
+            except Exception:
+                pass
 
 
 _agent_singleton: DualResearchAgent | None = None

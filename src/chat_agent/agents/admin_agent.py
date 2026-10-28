@@ -58,7 +58,8 @@ ADMIN_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_context7",
-            "description": "Search Context7 for official library documentation, error patterns, and framework usage to diagnose failures.",
+            "description": "Search Context7 for official library documentation, error patterns, "
+                           "and framework usage to diagnose failures.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -103,7 +104,7 @@ async def prune_slack_files_older_than(days: int = 30) -> int:
     if not token:
         logger.info("[Slack Pruner] Skipped Slack file pruning: bot token not configured.")
         return 0
-    logger.info('Started pruning slack deposited old files')
+
     cutoff_ts = int(time.time() - (days * 86400))
     deleted_count = 0
     try:
@@ -383,7 +384,10 @@ class AdminAgent:
         provider: str | None = None,
         user_id: str = "admin",
     ) -> dict[str, Any]:
-        """Execute full administrative maintenance cycle: prune >15-day records, prune >30-day Slack files, read 7-day metrics, and investigate failures."""
+        """
+        Execute full administrative maintenance cycle: prune >15-day records,
+        prune >30-day Slack files, read 7-day metrics, and investigate failures.
+        """
         job_id = f"admin_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
         start_ts = time.monotonic()
         active_provider = (provider or getattr(settings, "MODEL_PROVIDER", "nebius")).lower()
@@ -438,14 +442,17 @@ class AdminAgent:
                 "recent_failures": sanitized_recent_failures,
             }
 
-            user_prompt = (
-                f"Operational Telemetry & Retention Audit for session_tasks:\n"
-                f"```json\n{json.dumps(telemetry_payload, indent=2)}\n```\n\n"
-                "You have access to ADMIN_TOOLS (`search_context7` and `search_web`). "
-                "If there are any recent failures or anomalies, use these tools to investigate root causes. "
-                "Synthesize the complete audit into the mandatory SINGLE Markdown Data Table format starting with '# ✅ Administrative & Operations Audit'. "
-                "Report all metrics accurately without omitting any telemetry figures."
-            )
+            user_prompt = f"""Operational Telemetry & Retention Audit for session_tasks:
+                ```json
+                {json.dumps(telemetry_payload, indent=2)}
+                ```
+                
+                You have access to ADMIN_TOOLS (`search_context7` and `search_web`). 
+                If there are any recent failures or anomalies,  use these tools to investigate root causes. 
+                Synthesize the complete audit into the mandatory SINGLE Markdown Data Table
+                format starting with '# ✅ Administrative & Operations Audit'. 
+                Report all metrics accurately without omitting any telemetry figures.
+                """
 
             # Step 5: Model execution with tool dispatch
             logger.info(

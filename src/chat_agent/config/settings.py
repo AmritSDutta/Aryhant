@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # Core App & LLM
     APP_NAME: str = "aryhant"
-    MODEL_PROVIDER: str = "nebius"  #"gemini"
+    MODEL_PROVIDER: str = "nebius"  # "gemini"
     USER_LLM_MODEL: str = "gemini-flash-lite-latest"
     USER_LLM_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     NEBIUS_API_KEY: str = ""
     NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
     NEBIUS_MODEL: str = "nvidia/Nemotron-3.5-Super-VL"
-    QUESTION_GENERATOR_PROVIDER: str = "nebius"  #"gemini"
+    QUESTION_GENERATOR_PROVIDER: str = "nebius"  # "gemini"
     QUESTION_GENERATOR_MODEL: str = "gemini-flash-lite-latest"
     NEBIUS_QUESTION_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
     NEBIUS_QUESTION_FALLBACK_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"

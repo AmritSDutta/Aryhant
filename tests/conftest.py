@@ -18,7 +18,7 @@ def mock_settings() -> Settings:
         ARYHANT_SLACK_BOT_TOKEN="xoxb-test-bot-token",
         ARYHANT_SLACK_APP_TOKEN="xapp-test-app-token",
         SLACK_SIGNING_SECRET="test-slack-secret",
-        WEBHOOK_SHARED_SECRET="test-webhook-secret",
+        ARYHANT_WEBHOOK_SHARED_SECRET="test-webhook-secret",
         EMAIL_ENABLED=True,
         EMAIL_ADDRESS="bot@example.com",
         EMAIL_PASSWORD="test-password",

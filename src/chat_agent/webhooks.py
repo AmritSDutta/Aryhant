@@ -16,7 +16,7 @@ def _header(request: Request, name: str) -> str:
 
 
 def authorize_webhook(request: Request, body: bytes) -> None:
-    shared = settings.webhook_shared_secret
+    shared = settings.aryhant_webhook_shared_secret
     provided = _header(request, "X-Webhook-Secret") or _header(request, "X-Qstash-Forward-X-Webhook-Secret")
     if shared and provided and hmac.compare_digest(shared, provided):
         logger.info("Webhook authorization successful (shared secret matched).")
@@ -32,7 +32,7 @@ def authorize_webhook(request: Request, body: bytes) -> None:
         return
 
     if not shared and not slack_secret:
-        logger.error("Webhook rejected (503): Neither WEBHOOK_SHARED_SECRET "
+        logger.error("Webhook rejected (503): Neither ARYHANT_WEBHOOK_SHARED_SECRET "
                      "nor SLACK_SIGNING_SECRET is configured on the server.")
         raise HTTPException(status_code=503, detail="Service unavailable.")
 

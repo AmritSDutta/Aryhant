@@ -63,7 +63,7 @@ sequenceDiagram
 
 1. **Obtain QStash Credentials**:
    - In the [Upstash Console](https://console.upstash.com/), copy `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY`.
-2. **Generate `WEBHOOK_SHARED_SECRET`**:
+2. **Generate `ARYHANT_WEBHOOK_SHARED_SECRET`**:
    - Generate a secure 32-byte secret:
      ```bash
      python -c "import secrets; print(secrets.token_hex(32))"
@@ -74,7 +74,7 @@ sequenceDiagram
    - Configure environment secrets:
      - `QSTASH_TOKEN`: Upstash QStash token.
      - `CLOUD_RUN_WEBHOOK`: `https://<YOUR_CLOUD_RUN_URL>/webhooks/slack`.
-     - `WEBHOOK_SHARED_SECRET`: The shared secret generated in step 2.
+     - `ARYHANT_WEBHOOK_SHARED_SECRET`: The shared secret generated in step 2.
 4. **Configure Slack App Request URL**:
    - In [Slack App Console](https://api.slack.com/apps) $\rightarrow$ **Event Subscriptions**, set **Request URL** to the Cloudflare Worker URL.
    - The worker automatically handles the `url_verification` challenge.
@@ -92,7 +92,7 @@ sequenceDiagram
 
 `src/chat_agent/slack/slack_http.py` and `src/chat_agent/webhooks.py` handle inbound HTTP payloads:
 
-- **Webhook Authorization**: `authorize_webhook` verifies requests against `WEBHOOK_SHARED_SECRET` (`X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret` headers using constant-time `hmac.compare_digest`) or direct Slack v0 signatures (`X-Slack-Signature` + `X-Slack-Request-Timestamp` with a 5-minute timestamp window).
+- **Webhook Authorization**: `authorize_webhook` verifies requests against `ARYHANT_WEBHOOK_SHARED_SECRET` (`X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret` headers using constant-time `hmac.compare_digest`) or direct Slack v0 signatures (`X-Slack-Signature` + `X-Slack-Request-Timestamp` with a 5-minute timestamp window).
 - **Event Filtering**: `should_handle_event` accepts `app_mention` events and direct messages (`channel_type in {"im", "mpim"}`), ignoring bot messages to prevent feedback loops.
 - **Event Deduplication**: `is_duplicate_event` caches event IDs (`event_id`, `client_msg_id`, or `channel:ts`) for 10 minutes (`_DEDUP_TTL_SECONDS = 600`). If an unexpected exception occurs, `remove_dedup_event` evicts the ID to permit redelivery.
 - **Threaded Sessions**: Sessions are scoped to `slack:{channel}:{thread_ts}` for threads or `slack:{channel}:{msg_ts}` for top-level messages.

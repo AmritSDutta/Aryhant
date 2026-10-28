@@ -25,7 +25,7 @@ def test_settings_initialization_and_properties():
         ARYHANT_SLACK_BOT_TOKEN="xoxb-custom",
         ARYHANT_SLACK_APP_TOKEN="xapp-custom",
         SLACK_SIGNING_SECRET="secret",
-        WEBHOOK_SHARED_SECRET="shared",
+        ARYHANT_WEBHOOK_SHARED_SECRET="shared",
         EMAIL_ENABLED=True,
         EMAIL_ADDRESS="agent@domain.com",
         EMAIL_PASSWORD="agent-secret-pass",
@@ -43,6 +43,7 @@ def test_settings_initialization_and_properties():
     assert cfg.aryhant_slack_bot_token == "xoxb-custom"
     assert cfg.aryhant_slack_app_token == "xapp-custom" 
     assert cfg.slack_http_ready is True
+    assert cfg.aryhant_webhook_shared_secret == "shared"
     assert cfg.webhook_auth_ready is True
     assert cfg.email_ready is True
     assert cfg.email_allowed_senders_list == ["sender1@domain.com", "sender2@domain.com"]

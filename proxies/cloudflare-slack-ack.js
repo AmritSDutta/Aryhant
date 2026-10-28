@@ -27,7 +27,7 @@ export default {
         headers: {
           Authorization: `Bearer ${env.QSTASH_TOKEN}`,
           "Content-Type": "application/json",
-          "Upstash-Forward-X-Webhook-Secret": env.WEBHOOK_SHARED_SECRET || "",
+          "Upstash-Forward-X-Webhook-Secret": env.ARYHANT_WEBHOOK_SHARED_SECRET || "",
           "Upstash-Retries": "5",
         },
         body,

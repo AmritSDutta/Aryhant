@@ -246,7 +246,7 @@ def test_authorize_webhook_shared_secret_success():
     req = MagicMock(spec=Request)
     req.headers = {"X-Webhook-Secret": "my_shared_secret"}
     with patch("chat_agent.webhooks.settings") as mock_settings:
-        mock_settings.webhook_shared_secret = "my_shared_secret"
+        mock_settings.aryhant_webhook_shared_secret = "my_shared_secret"
         mock_settings.slack_signing_secret = ""
         # Should succeed without raising
         authorize_webhook(req, b"body")
@@ -256,7 +256,7 @@ def test_authorize_webhook_invalid_raises_401():
     req = MagicMock(spec=Request)
     req.headers = {"X-Webhook-Secret": "wrong_secret"}
     with patch("chat_agent.webhooks.settings") as mock_settings:
-        mock_settings.webhook_shared_secret = "my_shared_secret"
+        mock_settings.aryhant_webhook_shared_secret = "my_shared_secret"
         mock_settings.slack_signing_secret = ""
         with pytest.raises(HTTPException) as exc_info:
             authorize_webhook(req, b"body")

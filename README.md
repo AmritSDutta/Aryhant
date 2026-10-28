@@ -58,18 +58,18 @@ sequenceDiagram
 
 1. **Obtain Upstash QStash Credentials**:
    - In [Upstash Console](https://console.upstash.com/) $\rightarrow$ **QStash**, copy `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY`.
-2. **Generate `WEBHOOK_SHARED_SECRET`**:
+2. **Generate `ARYHANT_WEBHOOK_SHARED_SECRET`**:
    - Generate a pre-shared 32-byte secret in your terminal:
      ```bash
      python -c "import secrets; print(secrets.token_hex(32))"
      ```
-   - Add `WEBHOOK_SHARED_SECRET`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY` to your Cloud Run `.env` or GCP Secret Manager.
+   - Add `ARYHANT_WEBHOOK_SHARED_SECRET`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY` to your Cloud Run `.env` or GCP Secret Manager.
 3. **Deploy the Cloudflare Worker**:
    - Deploy [`proxies/cloudflare-slack-ack.js`](proxies/cloudflare-slack-ack.js) to Cloudflare Workers.
    - Configure Worker Variables & Secrets:
      - `QSTASH_TOKEN`: your Upstash QStash token.
      - `CLOUD_RUN_WEBHOOK`: `https://<YOUR_CLOUD_RUN_URL>/webhooks/slack`.
-     - `WEBHOOK_SHARED_SECRET`: the same secret generated in Step 2.
+     - `ARYHANT_WEBHOOK_SHARED_SECRET`: the same secret generated in Step 2.
 4. **Configure Slack Event Subscriptions**:
    - In [Slack App Console](https://api.slack.com/apps) $\rightarrow$ **Event Subscriptions**, set **Request URL** to `https://<your-worker>.<subdomain>.workers.dev`.
    - Subscribe to `app_mention` and `message.im`. Save changes.

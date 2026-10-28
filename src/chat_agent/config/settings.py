@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     MULTIMODAL_ENABLED: bool = True
 
     # Webhook Integration
-    WEBHOOK_SHARED_SECRET: str = ""
+    ARYHANT_WEBHOOK_SHARED_SECRET: str = ""
 
     # Email Integration (IMAP / SMTP)
     EMAIL_ENABLED: bool = False
@@ -169,8 +169,8 @@ class Settings(BaseSettings):
         return self.SLACK_SIGNING_SECRET or os.getenv("SLACK_SIGNING_SECRET", "")
 
     @property
-    def webhook_shared_secret(self) -> str:
-        return self.WEBHOOK_SHARED_SECRET or os.getenv("WEBHOOK_SHARED_SECRET", "")
+    def aryhant_webhook_shared_secret(self) -> str:
+        return self.ARYHANT_WEBHOOK_SHARED_SECRET or os.getenv("ARYHANT_WEBHOOK_SHARED_SECRET", "")
 
     @property
     def email_allowed_senders_list(self) -> List[str]:
@@ -216,7 +216,7 @@ class Settings(BaseSettings):
 
     @property
     def webhook_auth_ready(self) -> bool:
-        return bool(self.webhook_shared_secret or self.slack_signing_secret)
+        return bool(self.aryhant_webhook_shared_secret or self.slack_signing_secret)
 
     @property
     def resolved_turso_db_path(self) -> Path:

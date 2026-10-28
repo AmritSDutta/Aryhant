@@ -105,6 +105,7 @@ coverage.xml
 
 # Project-Specific Local Overrides
 cloud_deploy_cmd.md
+SUBMISSION.md
 *.db
 *.db-shm
 *.db-wal

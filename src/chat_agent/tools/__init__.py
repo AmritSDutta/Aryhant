@@ -16,6 +16,7 @@ from chat_agent.tools.tool_factory import (
     generate_practice_questions,
     generate_study_notes_pdf,
     get_current_time,
+    get_icse_syllabus,
     search_web,
     upload_file_to_slack,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "generate_study_notes_pdf",
     "generate_infographic_pdf",
     "get_current_time",
+    "get_icse_syllabus",
     "search_web",
     "upload_file_to_slack",
 ]

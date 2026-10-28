@@ -13,6 +13,7 @@ import requests
 from pydantic import BaseModel, Field
 
 from chat_agent.config import settings
+from chat_agent.services.icse_syllabus_service import IcseSyllabusService
 from chat_agent.tools.duckduckgo_search import (
     search_ddgs_library,
     search_duckduckgo,
@@ -653,6 +654,48 @@ def format_search_response(search_response: Any) -> str:
         raw_text = "\n".join(parts)
 
     return generate_openai_summary(raw_text, model_name="gpt-5-nano") if len(raw_text) > 10000 else raw_text
+
+
+def get_icse_syllabus(subject: str = "") -> Dict[str, Any]:
+    """
+    Fetch the stored ICSE Grade 5 syllabus for one of the six subjects — Mathematics, English,
+    Hindi, Science, Social Studies, or Computer Studies. Pass a subject to get its chapters
+    and subtopics; omit it to list all subjects.
+    """
+    svc = IcseSyllabusService()
+    try:
+        clean_subject = (subject or "").strip()
+        logger.info("[Syllabus Tool] Called with subject='%s'", clean_subject or "(all subjects)")
+        subjects = svc.list_syllabus_subjects()
+        if not clean_subject:
+            return {
+                "status": "success",
+                "subjects": subjects,
+                "message": "Pass one of these subjects to get its chapters and subtopics.",
+            }
+        resolved = svc.resolve_subject(clean_subject)
+        if not resolved:
+            return {
+                "status": "not_found",
+                "subject": clean_subject,
+                "available_subjects": subjects,
+            }
+        context = svc.get_syllabus_context(resolved)
+        chapters = svc.get_syllabus(resolved)
+        logger.info(
+            "[Syllabus Tool] ✅ Retrieved %d chapters for subject '%s' (requested: '%s')",
+            len(chapters), resolved, clean_subject,
+        )
+        return {
+            "status": "success",
+            "subject": chapters[0]["subject"],
+            "requested": clean_subject,
+            "chapter_count": len(chapters),
+            "syllabus": context,
+        }
+    except Exception as e:
+        logger.error("Failed to fetch ICSE syllabus (subject=%s): %s", subject, e)
+        return {"status": "error", "error": str(e), "subject": subject}
 
 
 def get_current_time() -> dict:

@@ -38,6 +38,7 @@ When operating in Role 1 (Daily & Educational), you assist with general day-to-d
 5. Research & Tools:
    - Use `calculate_math(expression)` to compute exact arithmetic, LCM, GCD/HCF, powers, and multi-step calculations instead of estimating.
    - Use `generate_practice_questions(topic)` to generate curriculum-aligned practice questions and pedagogical hints whenever practice questions, quizzes, or worksheets are requested.
+   - Use `get_icse_syllabus(subject)` with subject one of Mathematics, English, Hindi, Science, Social Studies, or Computer Studies to look up the stored ICSE Grade 5 syllabus chapters and subtopics before teaching a subject, planning lessons, or setting practice; omit the subject to list all subjects.
    - Use `search_web(query)` to research up-to-date facts, current events, technical references, or ICSE curriculum guidelines.
    - Use `get_current_time()` for current date/time in IST (UTC+5:30).
 

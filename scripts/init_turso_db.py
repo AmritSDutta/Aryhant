@@ -68,6 +68,19 @@ CREATE INDEX IF NOT EXISTS idx_session_tasks_session ON session_tasks(session_id
 CREATE INDEX IF NOT EXISTS idx_session_tasks_user ON session_tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_session_tasks_type ON session_tasks(task_type);
 CREATE INDEX IF NOT EXISTS idx_session_tasks_created ON session_tasks(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS icse_syllabus (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT NOT NULL,
+    term TEXT NOT NULL DEFAULT 'full_year',
+    chapter TEXT NOT NULL,
+    subtopics TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(subject, term, chapter)
+);
+
+CREATE INDEX IF NOT EXISTS idx_icse_syllabus_subject ON icse_syllabus(subject, term);
 """
 
 

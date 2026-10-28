@@ -19,6 +19,7 @@ from chat_agent.tools.tool_factory import (
     generate_infographic_pdf,
     generate_study_notes_pdf,
     get_current_time,
+    get_icse_syllabus,
     search_web,
 )
 
@@ -56,6 +57,7 @@ _TOOLS: list[Any] = [
     generate_infographic_pdf,
     calculate_math,
     generate_practice_questions,
+    get_icse_syllabus,
 ]
 _TOOL_MAP: dict[str, Any] = {fn.__name__: fn for fn in _TOOLS}
 

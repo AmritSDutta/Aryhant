@@ -20,6 +20,7 @@ from chat_agent.tools.tool_factory import (
     calculate_math,
     generate_study_notes_pdf,
     get_current_time,
+    get_icse_syllabus,
     search_web,
 )
 
@@ -36,6 +37,7 @@ _TOOLS: list[Any] = [
     generate_infographic_pdf,
     generate_practice_questions,
     calculate_math,
+    get_icse_syllabus,
 ]
 _TOOL_MAP: dict[str, Any] = {fn.__name__: fn for fn in _TOOLS}
 
@@ -80,6 +82,22 @@ OPENAI_TOOLS: list[dict[str, Any]] = [
             "name": "get_current_time",
             "description": "Return current date and time formatted in Indian Standard Time (IST) and UTC.",
             "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_icse_syllabus",
+            "description": "Fetch the stored ICSE Grade 5 syllabus for one of the six subjects — Mathematics, English, Hindi, Science, Social Studies, or Computer Studies. Pass a subject to get its chapters and subtopics; omit it to list all subjects. Use before teaching a subject, planning lessons, or setting practice.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subject": {
+                        "type": "string",
+                        "description": "One of: Mathematics, English, Hindi, Science, Social Studies, Computer Studies. Optional; omit to list all subjects.",
+                    },
+                },
+            },
         },
     },
     {

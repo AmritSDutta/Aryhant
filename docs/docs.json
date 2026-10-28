@@ -14,7 +14,7 @@
       { "group": "Channels", "pages": ["slack", "email", "multimodal"] },
       { "group": "Web Interface", "pages": ["web-ui"] },
       { "group": "API & Auth", "pages": ["api-reference"] },
-      { "group": "Capabilities & Tools", "pages": ["web-search", "study-notes", "question-generation", "math-tool", "nebius", "text-formatter", "observability"] },
+      { "group": "Capabilities & Tools", "pages": ["icse-syllabus", "web-search", "study-notes", "question-generation", "math-tool", "nebius", "text-formatter", "observability"] },
       { "group": "Memory & State", "pages": ["redis-session-history", "turso-memory-preferences"] },
       { "group": "Research & Deliberation", "pages": ["technical-research", "deliberation"] },
 

@@ -523,9 +523,10 @@ class TursoMemoryService:
             "Analyze this Grade 5 student message and AI response. "
             "Extract 1 concise pedagogical learning habit, recurring topic interest, or explanation preference if present. "
             "Never include personal names, ages, phone numbers, or private details. "
+            "Category must be exactly one of: Mathematics, Science, Language, Tone. "
             'If nothing noteworthy or general greeting, return {"statement": null}.\n'
-            f"Student: {user_text[:400]}\n"
-            f"Assistant: {assistant_reply[:400]}\n\n"
+            f"Student (excerpt): {user_text[:400]}\n"
+            f"Assistant (excerpt): {assistant_reply[:400]}\n\n"
             'Output a valid JSON object only: {"statement": "...", "category": "Mathematics|Science|Language|Tone"} or {"statement": null}'
         )
 

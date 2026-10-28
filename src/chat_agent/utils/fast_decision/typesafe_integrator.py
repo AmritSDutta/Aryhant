@@ -47,11 +47,10 @@ async def get_feedback(
     questions: dict[str, Noul] = {
         f"hint_eval_{item.id}": Noul(
             instructions=(
-                f"""Score how helpful, clear, and pedagogically effective `item_{item.id}.hint` is 
-                for a Grade 5 student attempting `item_{item.id}.question`. 
-                Return 1.0 for maximally helpful (process-focused, age-appropriate, not giving away the answer), 
-                0.0 for unhelpful or misleading. Consider `user_query` if present.
-            """
+                f"Score how helpful, clear, and pedagogically effective `item_{item.id}.hint` is "
+                f"for a Grade 5 student attempting `item_{item.id}.question`. "
+                "Return 1.0 for maximally helpful (process-focused, age-appropriate, not giving away the answer), "
+                "0.0 for unhelpful or misleading. When scores are equal, favor concise, process-based hints."
             )
         )
         for item in qnah

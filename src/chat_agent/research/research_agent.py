@@ -38,13 +38,13 @@ This is getting executed as of: {current_date}.
 Mandatory Structure & Word Quotas (Aim for ~2,500 words total):
 1. Executive Summary & Problem Scope (~300 words)
 2. Architectural & Foundational Mechanics (~600 words)
-3. Concrete Implementation & Verified Code Patterns (~600 words) - Incorporate provided Context7 code and Nebius sandbox execution results.
+3. Concrete Implementation & Verified Code Patterns (~600 words) - Incorporate any provided code snippets and Nebius sandbox execution results; otherwise derive concrete patterns from verified technical documentation.
 4. Failure Modes, Edge Cases & Bottlenecks (~450 words)
 5. Quantitative Benchmarks & Trade-offs (~350 words)
 6. Production Best Practices & References (~200 words)
 
 Guidelines:
-- Ground your analysis in the provided Google AI Overview, Tavily Mini-Research, and verified Context7 code snippets.
+- Ground your analysis in the provided Google AI Overview, Tavily Mini-Research, and verified code snippets.
 - If visual evidence or diagrams are provided, explicitly analyze their architectural components.
 - Output clean Markdown with headers (#, ##, ###), tables, and syntax-highlighted code blocks.
 """
@@ -55,7 +55,7 @@ This is getting executed as of: {current_date}.
 
 Mandatory Structure & Word Quotas (Aim for ~1,500 words total):
 1. Executive Verdict & Bottom-Line Recommendation (~250 words)
-2. Evaluation Criteria & Comparison Matrix Table (~350 words) - Include a Markdown table comparing top 3-4 contenders on Price, Quality, Value, and Risk.
+2. Evaluation Criteria & Comparison Matrix Table (~350 words) - If concrete products/options exist, include a Markdown table comparing top contenders on Price, Quality, Value, and Risk. For abstract decisions, provide a structured criteria evaluation.
 3. Detailed Contender Breakdown (~500 words) - Deep dive into top choices with Pros, Cons, and True Costs.
 4. Hidden Catches, Fine Print & Pitfalls (~250 words) - Address marketing traps, policy fine print, volatility, or ingredients.
 5. Action Plan & Step-by-Step Buying Guide (~150 words) - Concrete decision checklist.
@@ -168,8 +168,8 @@ class DualResearchAgent:
 
         prompt = (
             f"Analyze the attached visual evidence for the topic '{topic}'. "
-            "Transcribe all visible architecture components, data flows, labels, numbers, and system interfaces. "
-            "Provide a dense, factual 2-3 paragraph summary of what the diagram or image shows."
+
+            "Provide a dense, factual 2-3 paragraph summary detailing visible architecture components, data flows, labels, and system interfaces."
         )
         content = build_adk_multimodal_content(prompt, valid_images)
         runner = get_model_runner()

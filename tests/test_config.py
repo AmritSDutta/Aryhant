@@ -98,6 +98,23 @@ async def test_auth0_verify_token_when_auth_disabled():
         assert res == {"payload": {}, "permissions": []}
 
 
+@pytest.mark.asyncio
+async def test_verify_allowed_users():
+    from chat_agent.config.auth0_config import verify_allowed_users
+    from fastapi import HTTPException
+
+    with patch("chat_agent.config.auth0_config.settings") as mock_settings:
+        mock_settings.is_email_allowed.side_effect = lambda e: e == "admin@example.com"
+
+        # Allowed user succeeds
+        await verify_allowed_users({"email": "admin@example.com"})
+
+        # Disallowed user raises 403
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_allowed_users({"email": "attacker@example.com"})
+        assert exc_info.value.status_code == 403
+
+
 def test_setup_grafana_unconfigured():
     app_mock = MagicMock()
     with patch("chat_agent.config.grafana_config.settings") as mock_cfg:

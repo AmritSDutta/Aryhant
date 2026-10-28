@@ -84,7 +84,7 @@ async def verify_token(token: Optional[HTTPAuthorizationCredentials] = Security(
         )
 
         permissions = payload.get("permissions", [])
-        logging.info(f"### Token verified. Permissions found: {permissions}")
+        logger.info(f"### Token verified. Permissions found: {permissions}")
 
         return {
             "payload": payload,
@@ -113,14 +113,14 @@ async def get_user_profile(access_token: str, decoded_payload: dict = None):
         if decoded_payload.get('gty') == "client-credentials" or sub.endswith("@clients"):
             user_info['name'] = 'M2M'
             user_info['email'] = 'M2M@auth0.com'
-            logging.info(f"userinfo (from token): {user_info['name']}, {user_info['email']}")
+            logger.info(f"userinfo (from token): {user_info['name']}, {user_info['email']}")
             return user_info
         user_info['name'] = decoded_payload.get('name') or decoded_payload.get('nickname') or ''
         user_info['email'] = decoded_payload.get('email') or ''
 
         if user_info['name'] and user_info['email']:
             if settings.LOG_USER_INFO:
-                logging.info(f"userinfo (from token): {user_info['name']}, {user_info['email']}")
+                logger.info(f"userinfo (from token): {user_info['name']}, {user_info['email']}")
             await verify_allowed_users(user_info)
             return user_info
 
@@ -142,7 +142,7 @@ async def get_user_profile(access_token: str, decoded_payload: dict = None):
             user_info['name'] = data.get('name') or data.get('nickname') or ''
             user_info['email'] = data.get('email') or ''
             if settings.LOG_USER_INFO:
-                logging.info(f"userinfo (from endpoint): {user_info.get('name')}, {user_info.get('email')}")
+                logger.info(f"userinfo (from endpoint): {user_info.get('name')}, {user_info.get('email')}")
             await verify_allowed_users(user_info)
     except HTTPException:
         raise
@@ -152,8 +152,9 @@ async def get_user_profile(access_token: str, decoded_payload: dict = None):
 
 
 async def verify_allowed_users(user_info: dict):
-    email = (user_info.get('email') or '').lower()
-    if "amrit" not in email:
+    email = str(user_info.get('email') or '').strip()
+    if not settings.is_email_allowed(email):
+        logger.warning(f"Access denied: email '{email}' is not in ARYHANT_ALLOWED_EMAILS")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized")
 
 

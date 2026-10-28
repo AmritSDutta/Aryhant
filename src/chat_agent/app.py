@@ -106,6 +106,10 @@ async def chat(
     payload: ChatRequest,
     auth_info: dict = Depends(auth0.require_auth()),
 ) -> ChatResponse:
+    user_profile = await get_user_profile(
+        access_token=token.credentials,
+        decoded_payload=auth_info.get("payload")
+    )
     if not await scan_for_vulnerability(payload.message):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

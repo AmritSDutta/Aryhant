@@ -1,8 +1,18 @@
 # Aryhant: AI Daily Companion & ICSE Teaching Assistant
 
-A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous deep technical research with 24-hour failover resume.
+An always-on personal AI companion powered by **Nebius Token Factory** running **NVIDIA Nemotron** open source models, delivered through Slack, a web UI, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous deep technical research with 24-hour failover resume. Gemini and OpenAI models serve as automatic fallbacks only.
 
 > **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, and 24-hour resilient deep research whitepapers are fully implemented.
+
+## Powered by Nebius Token Factory & NVIDIA Nemotron
+
+All primary inference runs on [Nebius Token Factory](https://nebius.com) (`api.tokenfactory.nebius.com/v1`) against NVIDIA open source Nemotron models:
+
+- **Chat, vision & tool loops** — `nvidia/Nemotron-3.5-Super-VL` (default `NEBIUS_MODEL`): the always-on companion brain, multimodal attachment understanding, and multi-turn tool calling.
+- **Question generation** — `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (primary) with `nvidia/nemotron-3-super-120b-a12b` failover, generating 15–20 ICSE practice questions and hints.
+- **Research verification & admin diagnostics** — Token Factory sandboxes verify research code snippets, and the autonomous admin auditor runs its multi-turn diagnostic loop on Nemotron.
+
+See [docs/nebius.mdx](docs/nebius.mdx) for the full architecture. Gemini (Google GenAI) and OpenAI are wired as automatic fallbacks when Token Factory is unavailable.
 
 ## What works today
 

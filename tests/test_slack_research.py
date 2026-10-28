@@ -400,6 +400,7 @@ async def test_dual_research_agent_flow_and_persistence():
         assert "This is getting executed as of:" in sys_inst
         assert "Principal Systems Architect" in sys_inst
         assert run_call_kwargs.get("enable_tools") is False
+        assert run_call_kwargs.get("max_tokens") == 25000
 
         # Verify user synthesis content
         sent_content = run_call_kwargs["content"]

@@ -166,13 +166,15 @@ async def _call_gemini(
     session_id: str = "",
     system_instruction: str | None = None,
     enable_tools: bool = True,
+    max_tokens: int | None = None,
 ) -> str:
     """Call Google GenAI directly with tool support (manual function-calling loop)."""
     client = _get_genai_client()
+    effective_max_tokens = max_tokens or settings.max_output_tokens
     config = types.GenerateContentConfig(
         system_instruction=system_instruction if system_instruction is not None else _system_prompt(user_memory_context),
         temperature=0.2,
-        max_output_tokens=settings.max_output_tokens,
+        max_output_tokens=effective_max_tokens,
         safety_settings=safety_settings,
         tools=_TOOLS if enable_tools else [],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
@@ -247,9 +249,11 @@ async def _run_with_retry_and_fallback(
     user_memory_context: str | None = None,
     system_instruction: str | None = None,
     enable_tools: bool = True,
+    max_tokens: int | None = None,
 ) -> str:
     """Call a randomly selected FIRST_CHOICE_MODELS model up to 3 times, then fall back to FALLBACK_GPT_MODEL."""
     first_choice_models = getattr(settings, "FIRST_CHOICE_MODELS", []) or [settings.model]
+    effective_max_tokens = max_tokens or settings.max_output_tokens
 
     for attempt in range(3):
         chosen_model = random.choice(first_choice_models)
@@ -268,6 +272,7 @@ async def _run_with_retry_and_fallback(
                 session_id=session_id,
                 system_instruction=system_instruction,
                 enable_tools=enable_tools,
+                max_tokens=max_tokens,
             )
             if reply:
                 logger.info("[Model Execution] ✅ Success response received from model '%s'", chosen_model)
@@ -306,7 +311,7 @@ async def _run_with_retry_and_fallback(
                             {"role": "system", "content": _system_prompt(user_memory_context)},
                             {"role": "user", "content": user_text},
                         ],
-                        max_completion_tokens=settings.max_output_tokens,
+                        max_completion_tokens=effective_max_tokens,
                     )
                 except Exception as e_tok:
                     logger.info(
@@ -348,9 +353,9 @@ async def _run_with_retry_and_fallback(
                         {"role": "system", "content": _system_prompt(user_memory_context)},
                         {"role": "user", "content": user_text},
                     ],
-                    "max_completion_tokens": settings.max_output_tokens,
+                    "max_completion_tokens": effective_max_tokens,
                 }
-                async with httpx.AsyncClient(timeout=30.0) as http_client:
+                async with httpx.AsyncClient(timeout=180.0) as http_client:
                     resp = await http_client.post(url, json=payload, headers=headers)
                     if resp.status_code == 400:
                         logger.info(
@@ -395,9 +400,10 @@ class GeminiModelRunner:
         user_id: str,
         session_id: str,
         content: types.Content,
-    user_memory_context: str | None = None,
-    system_instruction: str | None = None,
-    enable_tools: bool = True,
+        user_memory_context: str | None = None,
+        system_instruction: str | None = None,
+        enable_tools: bool = True,
+        max_tokens: int | None = None,
     ) -> str:
         """Execute Gemini model with retries and fallback."""
         _prune_prior_binary_parts(session_id)
@@ -408,4 +414,5 @@ class GeminiModelRunner:
             user_memory_context=user_memory_context,
             system_instruction=system_instruction,
             enable_tools=enable_tools,
+            max_tokens=max_tokens,
         )

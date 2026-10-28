@@ -22,6 +22,7 @@ class ModelRunner(Protocol):
         user_memory_context: str | None = None,
         system_instruction: str | None = None,
         enable_tools: bool = True,
+        max_tokens: int | None = None,
     ) -> str:
         """Execute model with user message content and session context."""
         ...

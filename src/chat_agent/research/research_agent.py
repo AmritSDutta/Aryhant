@@ -460,6 +460,7 @@ class DualResearchAgent:
                     content=synthesis_content,
                     system_instruction=system_prompt,
                     enable_tools=False,
+                    max_tokens=getattr(settings, "RESEARCH_MAX_OUTPUT_TOKENS", 25000),
                 )
 
                 jev_res = await evaluate_report_quality(

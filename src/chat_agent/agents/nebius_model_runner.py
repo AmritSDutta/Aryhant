@@ -21,7 +21,6 @@ from chat_agent.tools.tool_factory import (
     generate_study_notes_pdf,
     get_current_time,
     search_web,
-
 )
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ _MAX_TOOL_ROUNDS = 5
 _TOOLS: list[Any] = [
     get_current_time,
     search_web,
-
     generate_study_notes_pdf,
     generate_infographic_pdf,
     generate_practice_questions,
@@ -260,18 +258,20 @@ async def _call_nebius_completion(
     base_url: str,
     session_id: str = "",
     enable_tools: bool = True,
+    max_tokens: int | None = None,
 ) -> str:
     """Execute chat completion request with manual tool calling loop."""
     convo = list(messages)
+    effective_max_tokens = max_tokens or settings.max_output_tokens
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=180.0)
         for _ in range(_MAX_TOOL_ROUNDS):
             call_kwargs: dict[str, Any] = {
                 "model": model,
                 "messages": convo,  # type: ignore[arg-type]
-                "max_tokens": settings.max_output_tokens,
+                "max_tokens": effective_max_tokens,
                 "temperature": 0.2,
             }
             if enable_tools:
@@ -354,13 +354,12 @@ async def _call_nebius_completion(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        async with httpx.AsyncClient(timeout=30.0) as http_client:
+        async with httpx.AsyncClient(timeout=180.0) as http_client:
             for _ in range(_MAX_TOOL_ROUNDS):
                 payload: dict[str, Any] = {
                     "model": model,
                     "messages": convo,
-                    # tools added below if enable_tools
-                    "max_tokens": settings.max_output_tokens,
+                    "max_tokens": effective_max_tokens,
                     "temperature": 0.2,
                 }
                 if enable_tools:
@@ -413,6 +412,7 @@ class NebiusModelRunner:
         user_memory_context: str | None = None,
         system_instruction: str | None = None,
         enable_tools: bool = True,
+        max_tokens: int | None = None,
     ) -> str:
         """Execute chat request against Nebius vision model with retries and fallback."""
         user_content = _build_nebius_content(content)
@@ -441,6 +441,7 @@ class NebiusModelRunner:
                         base_url=base_url,
                         session_id=session_id,
                         enable_tools=enable_tools,
+                        max_tokens=max_tokens,
                     )
                     if reply:
                         logger.info("[Model Execution] ✅ Success response received from Nebius '%s'", model)
@@ -464,6 +465,7 @@ class NebiusModelRunner:
                     base_url="https://api.openai.com/v1",
                     session_id=session_id,
                     enable_tools=enable_tools,
+                    max_tokens=max_tokens,
                 )
                 if reply:
                     await _save_nebius_history(session_id, user_content, reply)

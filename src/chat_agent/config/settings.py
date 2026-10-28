@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     NEBIUS_QUESTION_FALLBACK_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
     MAX_INPUT_CHARS: int = 5000
     MAX_OUTPUT_TOKENS: int = 8000
+    RESEARCH_MAX_OUTPUT_TOKENS: int = 25000
     REPLY_ONLY_TO_MENTIONS: bool = True
 
     # Slack Integration
@@ -150,6 +151,10 @@ class Settings(BaseSettings):
     @property
     def max_output_tokens(self) -> int:
         return self.MAX_OUTPUT_TOKENS
+
+    @property
+    def research_max_output_tokens(self) -> int:
+        return self.RESEARCH_MAX_OUTPUT_TOKENS
 
     @property
     def aryhant_slack_bot_token(self) -> str:

@@ -10,12 +10,54 @@ The `/deliberate` command activates Aryhant's **Dedicated Deliberation Agent**�
 It investigates options across stocks, consumer electronics, skincare and beauty products, insurance policies, healthcare plans, travel itineraries, and lifestyle investments, delivering a **~1,500-word ReportLab PDF Decision Guide** directly into the Slack conversation thread.
 
 ```mermaid
-flowchart LR
-    A["/deliberate query + photos/charts"] --> B["Multimodal Vision"]
-    B --> C["Multi-Source Intelligence"]
-    C --> D["Comparative Matrix & Trade-offs"]
-    D --> E["1,500w Decision Synthesis"]
-    E --> F["ReportLab PDF in Thread"]
+flowchart TD
+  subgraph Ingestion["1. Inbound Ingestion & Evidence"]
+    direction TB
+    UserMsg["Slack /deliberate or App Mention"]
+    Attach["Optional Spec Sheets, Quotes, Photos"]
+    UserMsg --> Parse["Parse Decision Topic & Thread Context"]
+    Attach --> Vision["Nebius Vision Document Extraction"]
+    Parse --> Safety["SafetyGuard.check_safety"]
+    Vision --> Safety
+  end
+  subgraph SafetyDecision["2. Safety Screening"]
+    direction TB
+    Safety -->|Policy Violation| Reject["Persist Rejected Task to session_tasks"]
+    Reject --> DenyMsg["Polite Denial in Thread & Release Slot"]
+    Safety -->|Approved| ScopeCheck["Intake: is_clear_scope"]
+  end
+  subgraph ScopeIntake["3. Scope Formulation"]
+    direction TB
+    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Notice - 30s Grace Window"]
+    ScopeNotice -->|Auto-proceed or timeout| Checkpoint["Redis Store: find_active_job"]
+    ScopeCheck -->|Clear Scope| Checkpoint
+  end
+  subgraph ResilientStore["4. 24-Hour Resilient Checkpointing"]
+    direction TB
+    Checkpoint -->|Active Job Found| Resume["Resume Job State & Cached Tool Outputs"]
+    Checkpoint -->|New Job| InitJob["Create ResearchJobState - checkpoint: initial"]
+    Resume --> IntelGather["4-Stream Intelligence Gathering"]
+    InitJob --> IntelGather
+  end
+  subgraph SynthesisStage["5. Decision Synthesis & FAQ"]
+    direction TB
+    IntelGather --> Synthesis["Synthesis Engine - 1,500w Decision Guide"]
+    IntelGather --> FAQGen["Concurrent FAQ Generation - faq_engine.py"]
+    Synthesis --> QualityCheck["JEV Quality Validation - jev_validator.py"]
+    FAQGen --> QualityCheck
+  end
+  subgraph DeliveryStage["6. PDF Compilation & Slack Delivery"]
+    direction TB
+    QualityCheck --> PDFGen["PDFBuilder: ReportLab Decision Guide"]
+    PDFGen --> Upload["Slack files.uploadExternal"]
+    Upload --> Summary["Post Executive Verdict to Thread"]
+    Summary --> BoardDone["Update Redis Board: Status Complete"]
+  end
+  Ingestion --> SafetyDecision
+  SafetyDecision --> ScopeIntake
+  ScopeIntake --> ResilientStore
+  ResilientStore --> SynthesisStage
+  SynthesisStage --> DeliveryStage
 ```
 
 ---
@@ -28,7 +70,7 @@ flowchart LR
 4. **Google AI Overview**: Ingests Google's AI Overview text blocks and citations via SerpApi (`engine="google_ai_overview"` with `page_token`).
 5. **Tavily Mini-Research Polling**: Submits targeted queries to Tavily (`model="mini"`) and polls until completion with session tracking for up-to-date pricing and consumer reviews.
 6. **Multimodal Evidence Ingestion**: Ingests user-attached product photos, spec sheets, insurance quotes, nutrition labels, or financial charts and embeds them into the PDF report.
-7. **Redis Fault Tolerance**: All job states and task milestones are persisted under `aryhant:job:{job_id}` in Upstash Redis with a 24-hour TTL and in-memory fallback.
+7. **24-Hour Fault Tolerance & Resilient Checkpointing**: All job states, tool outputs, and checkpoints are persisted under `aryhant:job:{job_id}` in Upstash Redis with secondary indexing (`find_active_job`) allowing interrupted deliberation jobs to resume seamlessly within 24 hours.
 8. **Live Slack TODO Board**: Displays dynamic Block Kit progress rows that advance in real time (`⬜` $\to$ `🔄` $\to$ `✅`) via Slack `chat.update`.
 
 ---
@@ -36,21 +78,26 @@ flowchart LR
 ## Directory Architecture
 
 <Tree>
-  <Tree.Folder name="src/chat_agent">
-    <Tree.Folder name="tools">
+  <Tree.Folder name="src/chat_agent" defaultOpen>
+    <Tree.Folder name="research" defaultOpen>
+      <Tree.File name="models.py" highlight />
+      <Tree.File name="safety_guard.py" highlight />
+      <Tree.File name="intake.py" highlight />
+      <Tree.File name="engine.py" highlight />
+      <Tree.File name="faq_engine.py" highlight />
+      <Tree.File name="jev_validator.py" highlight />
+      <Tree.File name="research_agent.py" highlight />
+      <Tree.File name="pdf_builder.py" highlight />
+      <Tree.File name="todo_tracker.py" highlight />
+    </Tree.Folder>
+    <Tree.Folder name="services" defaultOpen>
+      <Tree.File name="redis_research_store.py" highlight />
+      <Tree.File name="session_task_service.py" highlight />
+    </Tree.Folder>
+    <Tree.Folder name="tools" defaultOpen>
       <Tree.File name="serpapi_tool.py" />
       <Tree.File name="tavily_research_tool.py" />
       <Tree.File name="tool_factory.py" />
-    </Tree.Folder>
-    <Tree.Folder name="research">
-      <Tree.File name="models.py" />
-      <Tree.File name="engine.py" />
-      <Tree.File name="research_agent.py" />
-      <Tree.File name="pdf_builder.py" />
-      <Tree.File name="todo_tracker.py" />
-    </Tree.Folder>
-    <Tree.Folder name="services">
-      <Tree.File name="redis_research_store.py" />
     </Tree.Folder>
   </Tree.Folder>
 </Tree>

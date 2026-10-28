@@ -12,28 +12,24 @@ flowchart TD
     subgraph Trigger["Operational Trigger"]
         direction TB
         Slash["Slack /admin or /audit"]
-        Mention["App Mention: 'system health'"]
+        Mention["App Mention: system health"]
     end
-
     subgraph Deterministic["Deterministic Pre-Execution"]
         direction TB
-        Prune["Purge Records > 15 Days\n(delete_records_older_than)"]
-        Metrics["Aggregate 7-Day Telemetry\n(get_table_metrics)"]
+        Prune["Purge Records > 15 Days - delete_records_older_than"]
+        Metrics["Aggregate 7-Day Telemetry - get_table_metrics"]
     end
-
     subgraph LLM["Autonomous Diagnostics Loop"]
         direction TB
-        Dispatch["Model Execution\n(Nebius Nemotron-3-Nano-30B\nFallback: Gemini Flash Lite)"]
-        Context7["search_context7\n(Internal Documentation)"]
-        WebSearch["search_web\n(DuckDuckGo / Tavily / Serper)"]
+        Dispatch["Model Execution - Nebius Nemotron or Gemini Fallback"]
+        Context7["search_context7 - Internal Documentation"]
+        WebSearch["search_web - DuckDuckGo / Tavily / Serper"]
     end
-
     subgraph Output["Delivery"]
         direction TB
         Sanitize["Sanitize Secrets & Absolute Paths"]
         SlackPost["Post Report to Slack Channel/Thread"]
     end
-
     Trigger --> Deterministic
     Deterministic --> LLM
     Dispatch --> Context7

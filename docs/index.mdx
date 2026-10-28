@@ -9,7 +9,7 @@ A multimodal daily AI companion and educational assistant that serves chat input
 
 ## System Architecture
 
-The request path and the model execution core:
+The request path and the multi-role model execution core:
 
 ```mermaid
 flowchart TD
@@ -21,22 +21,60 @@ flowchart TD
   CF["Cloudflare Worker - Instant ACK"]
   QS["Upstash QStash - Queue and Retry"]
   FastAPI["FastAPI App - Rate Limiting and Auth0"]
-  Runner["Direct Runner - runner.py"]
+  Router["Multi-Role Dispatch Router"]
   GenAI["Direct Google GenAI - FIRST_CHOICE_MODELS"]
   GPT["Direct OpenAI Fallback - FALLBACK_GPT_MODEL"]
   History["Private Upstash Redis - 20-Turn Sliding Window & TTL"]
   Turso["Turso libSQL - Memory & Preferences Engine"]
   Browser --> FastAPI
-  SlackUser -->|Socket Mode| Runner
+  SlackUser -->|Socket Mode| Router
   SlackUser -->|HTTP Events| CF
   CF --> QS
   QS --> FastAPI
   EmailClient --> FastAPI
-  FastAPI --> Runner
-  Runner --> History
-  Runner --> Turso
-  Runner --> GenAI
+  FastAPI --> Router
+  Router --> History
+  Router --> Turso
+  Router --> GenAI
   GenAI -->|Transient Failover| GPT
+```
+
+### Four-Role Agent Architecture
+
+Aryhant coordinates across four specialized agent roles with dedicated state and tool layers:
+
+```mermaid
+flowchart TD
+  subgraph Inbound["Inbound Requests"]
+    direction TB
+    SlackIn["Slack Mentions, DMs & Slash Commands"]
+    RESTIn["FastAPI REST Endpoints /api/chat"]
+  end
+  subgraph Roles["Four Specialized Agent Roles"]
+    direction TB
+    R1["Role 1: Daily Companion & ICSE Teacher - runner.py"]
+    R2["Role 2: Practice Question Generator - question_generator/"]
+    R3["Role 3: Deep Technical Research & Deliberation - research_agent.py"]
+    R4["Role 4: Autonomous Telemetry & Data Auditor - admin_agent.py"]
+  end
+  subgraph Tier1Tier2["Resilient Data & Execution Tier"]
+    direction TB
+    RedisStore["Redis: 20-Turn Sliding History & 24h Research Checkpoints"]
+    TursoStore["Turso libSQL: PII-free Memories & session_tasks Telemetry"]
+    SandboxVM["Nebius TokenFactory: Isolated Code Execution MicroVMs"]
+    ReportLabPDF["ReportLab Engine: Handwritten Notes, Posters & Whitepapers"]
+  end
+  SlackIn --> Roles
+  RESTIn --> Roles
+  R1 --> RedisStore
+  R1 --> TursoStore
+  R1 --> ReportLabPDF
+  R2 --> TursoStore
+  R3 --> RedisStore
+  R3 --> TursoStore
+  R3 --> SandboxVM
+  R3 --> ReportLabPDF
+  R4 --> TursoStore
 ```
 
 The tools the runner dispatches to, and the background PDF pipeline:
@@ -87,6 +125,8 @@ flowchart LR
 - **Deterministic Email Access Control (`ARYHANT_ALLOWED_EMAILS`)**: Enforces workspace user authorization via `client.users_info` email resolution. Unauthorized callers receive an immediate, deterministic polite denial, bypassing LLM runner execution and protecting quota.
 - **Direct Turso libSQL Memory Service**: Direct connection to remote Turso databases (`ARYHANT_TURSO_DATABASE_URL`), storing learning preferences and student emails across turns without local replica synchronization.
 - **Strict Redis Key Isolation**: Thread session keys strictly prefixed with `aryhant:` (`format_session_key`) for multi-tenant Upstash Redis isolation.
+- **24-Hour Resilient Technical Research & Deliberation (Role 3)**: Autonomous research pipeline (`/research`, `/deliberate`) delivering 2,500-word ReportLab PDF whitepapers, 4-stream concurrent intelligence gathering (SerpApi, Tavily, Context7, WebSearchToolPool), isolated Nebius microVM code verification, concurrent FAQ formulation, JEV multi-dimension quality validation, and secondary index checkpointing allowing interrupted jobs to resume seamlessly within 24 hours.
+- **Autonomous Administrative & Telemetry Auditor (Role 4)**: Autonomous maintenance agent (`/admin`, `/audit`) executing deterministic 15-day task retention pruning, 7-day metric aggregation across `session_tasks`, and Context7 runbook diagnostics for operational hygiene.
 
 ## Codebase Structure
 
@@ -117,8 +157,15 @@ flowchart LR
         <Tree.File name="runner.py" highlight />
       </Tree.Folder>
       <Tree.Folder name="research" defaultOpen>
+        <Tree.File name="models.py" highlight />
+        <Tree.File name="safety_guard.py" highlight />
+        <Tree.File name="intake.py" highlight />
+        <Tree.File name="engine.py" highlight />
+        <Tree.File name="faq_engine.py" highlight />
+        <Tree.File name="jev_validator.py" highlight />
         <Tree.File name="research_agent.py" highlight />
-        <Tree.File name="deep_research.py" highlight />
+        <Tree.File name="pdf_builder.py" highlight />
+        <Tree.File name="todo_tracker.py" highlight />
       </Tree.Folder>
       <Tree.Folder name="question_generator" defaultOpen>
         <Tree.File name="__init__.py" />
@@ -181,12 +228,17 @@ flowchart LR
     <Tree.File name="conftest.py" />
     <Tree.File name="test_agent.py" />
     <Tree.File name="test_app.py" />
+    <Tree.File name="test_checkpoint_resilience.py" highlight />
     <Tree.File name="test_config.py" />
     <Tree.File name="test_email.py" />
+    <Tree.File name="test_faq_engine.py" highlight />
+    <Tree.File name="test_intake.py" highlight />
+    <Tree.File name="test_jev_validator.py" highlight />
     <Tree.File name="test_multimodal.py" />
     <Tree.File name="test_notes_generator.py" highlight />
     <Tree.File name="test_qstash.py" />
     <Tree.File name="test_question_generator.py" highlight />
+    <Tree.File name="test_safety_guard.py" highlight />
     <Tree.File name="test_slack.py" />
     <Tree.File name="test_duckduckgo_search.py" highlight />
     <Tree.File name="test_tools.py" />

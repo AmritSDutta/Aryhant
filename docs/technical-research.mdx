@@ -1,58 +1,167 @@
 ---
 title: Technical Research Flow (/research)
-description: Autonomous deep technical research agent delivering 2,500-word publication whitepaper PDFs, verified code testing, and multi-source intelligence in Slack.
+description: Autonomous deep technical research agent with 24-hour checkpoint resilience, 4-stream intelligence, pre-flight safety screening, JEV quality validation, and 2,500-word ReportLab PDF whitepapers in Slack.
 ---
 
 # Technical Research Flow (`/research`)
 
-The `/research` command activates Aryhant's **Dedicated Technical Researcher Agent**—a specialized pipeline designed to investigate engineering architectures, distributed systems, algorithms, and low-level software mechanics.
+The `/research` command activates Aryhant's **Dedicated Technical Researcher Agent** (Role 3)—an autonomous, fault-tolerant research pipeline engineered to investigate distributed architectures, low-level software mechanics, algorithms, and system design.
 
-It delivers a comprehensive **~2,500-word ReportLab PDF Whitepaper** directly into the Slack conversation thread, tracked live by an interactive, Redis-backed status board.
+It conducts multi-stream intelligence gathering, verifies live code snippets in isolated microVMs, dynamically formulates FAQs, enforces strict multi-dimensional quality evaluation with JEV/Noul, and compiles a **~2,500-word ReportLab PDF Whitepaper** directly into the Slack conversation thread.
+
+---
+
+## End-to-End Research Architecture Flow
+
+The complete execution lifecycle from inbound slash command to final PDF delivery:
 
 ```mermaid
-flowchart LR
-    A["/research topic + diagram"] --> B["Multimodal Vision"]
-    B --> C["Triple Intelligence Gathering"]
-    C --> D["Context7 & Sandbox Test"]
-    D --> E["2,500w Synthesis"]
-    E --> F["ReportLab PDF in Thread"]
+flowchart TD
+  subgraph Ingestion["1. Inbound Ingestion & Vision"]
+    direction TB
+    UserMsg["Slack /research or App Mention"]
+    Attach["Optional Architecture Diagram / Spec"]
+    UserMsg --> Parse["Parse Topic & Thread Context"]
+    Attach --> Vision["Nebius Vision Transcription"]
+    Parse --> Safety["SafetyGuard.check_safety"]
+    Vision --> Safety
+  end
+  subgraph SafetyDecision["2. Pre-flight Safety Guard"]
+    direction TB
+    Safety -->|Denied / Threat| Reject["Persist Rejected Task to session_tasks"]
+    Reject --> DenyMsg["Polite Denial in Thread & Release Slot"]
+    Safety -->|Approved| ScopeCheck["Intake: is_clear_scope"]
+  end
+  subgraph ScopeIntake["3. Scope & Grace Window"]
+    direction TB
+    ScopeCheck -->|Ambiguous or Has Image| ScopeNotice["Post Scope Card - 30s Grace Window"]
+    ScopeNotice -->|Auto-proceed or timeout| Checkpoint["Redis Store: find_active_job"]
+    ScopeCheck -->|Clear Scope| Checkpoint
+  end
+  subgraph ResilientStore["4. 24-Hour Resilient Checkpointing"]
+    direction TB
+    Checkpoint -->|Active Job Found| Resume["Resume Job State & Cached Tool Outputs"]
+    Checkpoint -->|New Job| InitJob["Create ResearchJobState - checkpoint: initial"]
+    Resume --> StreamExec["Engine: 4 Concurrent Intelligence Streams"]
+    InitJob --> StreamExec
+  end
+  subgraph IntelGathering["5. Concurrent Intelligence Streams"]
+    direction TB
+    StreamExec --> SerpApi["SerpApi - Google AI Overview"]
+    StreamExec --> Tavily["Tavily - Mini-Research Deep Crawl"]
+    StreamExec --> Context7["Context7 - API & Library Code Search"]
+    StreamExec --> WebSearch["WebSearchToolPool - Multi-query Subsearch"]
+    SerpApi --> CacheGuard["Per-Tool Status Tracking - ok / failed"]
+    Tavily --> CacheGuard
+    Context7 --> CacheGuard
+    WebSearch --> CacheGuard
+  end
+  subgraph Verification["6. Sandbox Execution & FAQ Generation"]
+    direction TB
+    CacheGuard --> Sandbox["Nebius Sandbox - MicroVM Execution"]
+    CacheGuard --> FAQGen["faq_engine.py - Concurrent FAQ Generation"]
+    Sandbox --> Synthesis["Synthesis Engine - Gemini 2,500w Whitepaper"]
+    FAQGen --> Synthesis
+  end
+  subgraph QualityLoop["7. JEV Multi-Dimension Quality Loop"]
+    direction TB
+    Synthesis --> JEV["JEVValidator.evaluate_quality"]
+    JEV -->|Score < 0.70 & attempt < 3| Critique["Derive Deterministic Critique from Low Criteria"]
+    Critique -->|Incorporate Feedback| Synthesis
+    JEV -->|Score >= 0.70 or Max Retries| PDFBuild["PDFBuilder.build_whitepaper_pdf"]
+  end
+  subgraph Delivery["8. Artifact Delivery & Slack Finalization"]
+    direction TB
+    PDFBuild --> Upload["Slack files.uploadExternal"]
+    Upload --> Summary["Post Executive Summary to Thread"]
+    Summary --> Board["Update Redis Board: Status Complete"]
+    Board --> SlotRelease["Release User Job Slot"]
+  end
+  Ingestion --> SafetyDecision
+  SafetyDecision --> ScopeIntake
+  ScopeIntake --> ResilientStore
+  ResilientStore --> IntelGathering
+  IntelGathering --> Verification
+  Verification --> QualityLoop
+  QualityLoop --> Delivery
 ```
 
 ---
 
-## Key Features
+## Core Architectural Pillars
 
-1. **Target Volume**: ~2,500 words across 6 mandatory technical sections.
-2. **Context7 Verified Code**: Queries Context7 Search v3 (`https://context7.com/api/v3/search`) to retrieve authentic library implementations and code snippets.
-3. **Nebius Sandbox Verification**: Candidate code snippets are executed and tested in isolated microVM sandboxes via Nebius TokenFactory (`contree-sdk` / REST API). Execution status, exit code, and stdout/stderr are embedded directly in Section 3 of the report.
-4. **Google AI Overview**: Scrapes Google's AI Overview text blocks and citations via SerpApi (`engine="google_ai_overview"` with `page_token`).
-5. **Tavily Mini-Research Polling**: Submits async research tasks to Tavily (`model="mini"`) and polls until completion with session tracking.
-6. **Multimodal Diagram Ingestion**: Ingests user-attached architecture diagrams or flowcharts, transcribes components, and embeds the diagram into the PDF report.
-7. **Redis Fault Tolerance**: All job states and task milestones are persisted under `aryhant:job:{job_id}` in Upstash Redis with a 24-hour TTL and in-memory fallback.
-8. **Live Slack TODO Board**: Posts dynamic Block Kit progress rows that advance in real time (`⬜` $\to$ `🔄` $\to$ `✅`) via Slack `chat.update`.
+### 1. Pre-flight Safety Guard (`safety_guard.py`)
+Before allocating compute or querying external APIs, topics undergo dual-layer pre-flight safety screening:
+- **Heuristic Pattern Screening**: Evaluates input against compiled regex patterns (`SAFETY_PATTERNS`) targeting privilege escalation, exploit generation, credential harvesting, malware authoring, and unauthorized access directives.
+- **JEV Classification (Role 3)**: Performs fast statistical classification for borderline queries.
+- **Audit Persistence**: If rejected, a record is persisted to Turso `session_tasks` via `SessionTaskService.acreate_task(..., status="rejected")` for administrative compliance auditing, the user's concurrency slot is released, and a polite denial is posted in the thread.
+
+### 2. Scope Clarification Grace Window (`intake.py`)
+- **Scope Formulation**: Analyzes the topic and generates target audiences, focus areas, and explicit success criteria.
+- **Clarity Detection**: Evaluates query specificity via `is_clear_scope(topic, has_attachments)` with stop-word filtering.
+- **Grace Window**: Clear technical queries proceed instantly. Ambiguous or multi-clause topics post an informational scope card and wait 30 seconds before auto-proceeding with the inferred scope. Resumed jobs skip the wait entirely.
+
+### 3. 24-Hour Checkpoint Resiliency (`redis_research_store.py`)
+- **Secondary Indexing**: Active jobs are indexed under `aryhant:active_job:thread:<channel_id>:<thread_ts>` and `aryhant:active_job:user:<user_id>:<topic_hash>`.
+- **Failover & Resume**: If a container restarts or network drops, a subsequent request within 24 hours locates the active job via `find_active_job` and resumes execution from its last recorded checkpoint (`initial`, `planned`, `gathered`, `verified`, `synthesized`).
+- **Sliding 24-Hour TTL**: State is persisted in Upstash Redis under `aryhant:job:<job_id>` with automatic 24-hour expiration (`REDIS_TTL_SEC = 86400`).
+
+### 4. 4-Stream Concurrent Intelligence Gathering (`engine.py`)
+Four asynchronous intelligence streams execute concurrently:
+1. **Google AI Overview** via SerpApi (`engine="google_ai_overview"` with `page_token`).
+2. **Tavily Mini-Research** (`model="mini"`) with deep-crawl polling.
+3. **Context7 Code Search** (`https://context7.com/api/v3/search`) for verified library implementations.
+4. **WebSearchToolPool Subsearch** for domain-specific query fan-out.
+
+#### Poison-Free Per-Tool Caching
+Outputs are stored as structured entries (`ToolOutputEntry(output=..., status="ok"|"failed", fetched_at=...)`). If a transient network glitch causes one stream to fail, its empty result is not permanently cached; on resume, failed streams are retried while successful outputs are reused from cache.
+
+### 5. Nebius Sandbox Code Verification
+Candidate code snippets extracted from Context7 are executed inside isolated microVM sandboxes via the Nebius TokenFactory (`contree-sdk` / REST API). The exact execution exit code, stdout, and stderr are captured and embedded into Section 3 of the final whitepaper.
+
+### 6. Concurrent FAQ Generation (`faq_engine.py`)
+While technical synthesis is underway, a dedicated FAQ engine concurrently queries the research corpus to formulate high-frequency technical questions and answers. These are cached in `tool_outputs["faq"]` and rendered in the appendix of the report.
+
+### 7. JEV Multi-Dimension Quality Loop (`jev_validator.py`)
+The synthesized publication is evaluated across 4 objective quality dimensions using TypeSafe AI System One (`Noul`):
+- `technical_accuracy`: Correctness of architectural explanations and system mechanics.
+- `structure`: Compliance with the 6-section quota and ReportLab formatting rules.
+- `code_depth`: Quality of verified code snippets and sandbox execution outputs.
+- `production_guidance`: Actionability of edge-case, failure-mode, and benchmark analyses.
+
+#### Deterministic Critique & Automated Retry
+If the quality score falls below threshold (`0.70`), the validator deterministically derives actionable critique from the failing criteria. The synthesis engine automatically incorporates this critique and retries synthesis (up to 3 attempts).
+
+### 8. Single-Thread Transparency (`[INTERNAL]` Notices)
+All progress notifications—including intelligence stream status, sandbox execution outputs, and JEV critique loops—are posted directly into the root Slack conversation thread with `[INTERNAL]` tags, keeping users informed without cluttering other channels.
 
 ---
 
 ## Directory Architecture
 
 <Tree>
-  <Tree.Folder name="src/chat_agent">
-    <Tree.Folder name="tools">
+  <Tree.Folder name="src/chat_agent" defaultOpen>
+    <Tree.Folder name="research" defaultOpen>
+      <Tree.File name="models.py" highlight />
+      <Tree.File name="safety_guard.py" highlight />
+      <Tree.File name="intake.py" highlight />
+      <Tree.File name="engine.py" highlight />
+      <Tree.File name="faq_engine.py" highlight />
+      <Tree.File name="jev_validator.py" highlight />
+      <Tree.File name="research_agent.py" highlight />
+      <Tree.File name="pdf_builder.py" highlight />
+      <Tree.File name="todo_tracker.py" highlight />
+    </Tree.Folder>
+    <Tree.Folder name="services" defaultOpen>
+      <Tree.File name="redis_research_store.py" highlight />
+      <Tree.File name="session_task_service.py" highlight />
+    </Tree.Folder>
+    <Tree.Folder name="tools" defaultOpen>
       <Tree.File name="serpapi_tool.py" />
       <Tree.File name="tavily_research_tool.py" />
       <Tree.File name="context7_tool.py" />
       <Tree.File name="sandbox_tool.py" />
       <Tree.File name="tool_factory.py" />
-    </Tree.Folder>
-    <Tree.Folder name="research">
-      <Tree.File name="models.py" />
-      <Tree.File name="engine.py" />
-      <Tree.File name="research_agent.py" />
-      <Tree.File name="pdf_builder.py" />
-      <Tree.File name="todo_tracker.py" />
-    </Tree.Folder>
-    <Tree.Folder name="services">
-      <Tree.File name="redis_research_store.py" />
     </Tree.Folder>
   </Tree.Folder>
 </Tree>
@@ -95,7 +204,7 @@ Topic: Linux io_uring architecture vs epoll high-throughput networking
 Scope: Technical Whitepaper (~2,500 words)
 
 ✅ 1. Analyze topic, visual context & plan queries
-✅ 2. Gather Google AI Overview, Tavily Mini-Research & Context7 code
+✅ 2. Gather Google AI Overview, Tavily Mini-Research, Context7 & WebSearch
 🔄 3. Verify code execution in Nebius Sandbox
 ⬜ 4. Synthesize technical publication (~2,500 words)
 ⬜ 5. Compile ReportLab PDF & upload to Slack

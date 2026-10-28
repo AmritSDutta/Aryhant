@@ -1,8 +1,8 @@
 # Aryhant: AI Daily Companion & ICSE Teaching Assistant
 
-A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation and Lesson Infographic posters with automated Slack thread delivery.
+A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous deep technical research with 24-hour failover resume.
 
-> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, and universal Study Notes / Infographics PDF generation with Slack auto-upload are fully implemented.
+> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, and 24-hour resilient deep research whitepapers are fully implemented.
 
 ## What works today
 
@@ -12,6 +12,7 @@ A versatile, direct Google GenAI and OpenAI daily AI assistant for Slack, email,
 | Grade 5 ICSE Teaching Specialization | Tailored for St. Xavier's Grade 5 ICSE syllabus: plain-text math (`3/5`, `cm²`, `+`, `-`, `x`, `÷`), 5–10 numbered practice questions, and answer keys grouped at the end |
 | Question Generation & TypeSafe Curation | Generates 15–20 candidate practice questions and hints via secondary LLM agent (`QA_GENERATOR_INSTRUCTION`), and uses TypeSafe AI System One (`Noul`) for parallel hint scoring and top-10 curation |
 | Universal PDF Notes & Infographics | ReportLab handwritten notebook notes (`generate_study_notes_pdf`) and visual posters (`generate_infographic_pdf`) on **any topic** compiled on background threads and auto-uploaded to Slack threads |
+| Resilient Deep Research & Deliberation (Role 3) | Autonomous research pipeline (`/research`, `/deliberate`) delivering ~2,500-word ReportLab PDF whitepapers, 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
 | Direct Multi-Model Engine | Direct Google GenAI SDK (`google.genai.Client`) with 3 random attempts across `FIRST_CHOICE_MODELS` and automatic failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` / `httpx` |
 | Procedural Diagrams | Dynamic math and science diagram generator (parabolas, waves, geometric figures, circuits, biological structures) |
 | Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with size budgets and prior-turn binary attachment pruning |
@@ -139,11 +140,11 @@ DM the bot or mention it in a joined channel.
 ## Project layout
 
 ```text
-src/chat_agent/          direct runner, prompt, config, tools, infographics, Slack, webhooks
+src/chat_agent/          direct runner, prompt, config, tools, research, infographics, Slack, webhooks
 src/chat_agent/app.py    FastAPI app: /api/*, /webhooks/*
 proxies/                 Cloudflare Worker source
 docs/                    docs7 documentation site
-tests/                   pytest hermetic test suite
+tests/                   pytest hermetic test suite (197 tests)
 ```
 
 ## Code map and tests
@@ -158,6 +159,12 @@ tests/                   pytest hermetic test suite
 | Handwritten study notes builder | [Notes Builder](src/chat_agent/infographics/notes_builder.py) |
 | Lesson infographic poster builder | [Infographics Builder](src/chat_agent/infographics/builder.py) |
 | Procedural math & science diagrams | [Diagrams](src/chat_agent/infographics/diagrams.py) |
+| Resilient research orchestrator (Role 3) | [Research Agent](src/chat_agent/research/research_agent.py) |
+| Pre-flight safety screening & audit persistence | [Safety Guard](src/chat_agent/research/safety_guard.py) |
+| 4-stream intelligence engine & poison-free cache | [Research Engine](src/chat_agent/research/engine.py) |
+| Concurrent FAQ generation engine | [FAQ Engine](src/chat_agent/research/faq_engine.py) |
+| JEV multi-dimension quality evaluator | [JEV Validator](src/chat_agent/research/jev_validator.py) |
+| 24-hour research checkpoint store & secondary indexing | [Redis Research Store](src/chat_agent/services/redis_research_store.py) |
 | Tool pool (time, web search, PDF notes & posters, Slack file upload) | [Tool Factory](src/chat_agent/tools/tool_factory.py) |
 | Math formatter (plain-text ICSE math) | [Math Formatter](src/chat_agent/utils/math_formatter.py) |
 | Multimodal attachments & moderation | [Multimodal](src/chat_agent/utils/multimodal.py) |
@@ -170,7 +177,7 @@ tests/                   pytest hermetic test suite
 | Slack Block Kit generator | [Post generator](src/chat_agent/slack/post_generator.py) |
 | FastAPI app and webhook authorization | [App](src/chat_agent/app.py), [Authorization](src/chat_agent/webhooks.py) |
 | Slack-to-QStash forwarding | [Cloudflare Worker](proxies/cloudflare-slack-ack.js) |
-| Unit tests | [Tests](tests/test_agent.py) |
+| Unit tests (197 tests) | [Tests](tests/test_agent.py) |
 
 Run tests:
 

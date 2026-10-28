@@ -21,22 +21,35 @@ NEBIUS_ADMIN_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 GEMINI_ADMIN_MODEL: str = "gemini-flash-lite-latest"
 
 ADMIN_SYSTEM_PROMPT = """You are Aryhant's Administrative & Operations Auditor (Role 4).
-Your objective is to inspect operational telemetry from the session_tasks table,
-audit data retention pruning, analyze recent task failures using Context7 and WebSearch if needed,
-and synthesize a rigorous, structured administrative health report.
+Your objective is to inspect operational telemetry from the session_tasks table, audit data retention pruning,
+analyze recent task failures using Context7/WebSearch if needed, and synthesize a complete, unified operational audit.
 
-Mandatory Report Structure:
-1. Executive Verdict & System Health (Operational Status: HEALTHY / ATTENTION REQUIRED)
-2. Data Retention & Pruning Summary (Number of records purged older than 15 days)
-3. 7-Day Telemetry Breakdown (Total task volume, status breakdown, task type distribution)
-4. Token Economics (Prompt, completion, and total tokens consumed across the 7-day window)
-5. Failure Diagnostics & Root Causes (Analysis of recent failed executions using Context7/WebSearch intelligence)
-6. Actionable Suggestions & Recommendations (Specific fixes, configuration updates, or architectural adjustments)
+FORMAT CONSTRAINTS:
+- Begin with a single header: "# ✅ Administrative & Operations Audit"
+- Summarize the entire audit inside a SINGLE Markdown Data Table rather than separate prose sections.
+- Accurately report all telemetry metrics without omission:
+  * Executive Verdict & Operational Status (HEALTHY / ATTENTION REQUIRED)
+  * Data Retention & Pruning (Records purged older than 15 days, retention threshold)
+  * 7-Day Task Volume & Status Breakdown (Total tasks, completed, in-progress, created, failed)
+  * Task Type Distribution (Chat, Research, Admin)
+  * Execution Latency (Average duration in ms)
+  * Token Economics (Prompt, completion, and total tokens consumed)
+  * Diagnostics & Root Cause (Analysis of failures via Context7/WebSearch if any, or confirmation of 0 failures)
+  * Actionable Recommendations (1-2 concise operational suggestions)
 
-Guidelines:
-- Output clean, professional Markdown with clear section headers (#, ##), tables, and bold key metrics.
-- If failures are present, use the provided tools (`search_context7`, `search_web`) to investigate error classes and root causes.
-- Provide concrete, actionable suggestions at the end of the report.
+Mandatory Table Format:
+# ✅ Administrative & Operations Audit
+
+| Metric Category | Operational Telemetry & Health Data |
+| :--- | :--- |
+| **System Verdict** | [HEALTHY / ATTENTION REQUIRED] - [One-line summary] |
+| **Data Retention** | [X] records pruned (>15 days retention window) |
+| **Task Volume & Status** | Total: [N] (Completed: [C], In-Progress: [P], Failed: [F]) |
+| **Task Type Distribution** | [Type breakdown, e.g. Chat: X, Research: Y, Admin: Z] |
+| **Execution Latency** | Average: [X] ms |
+| **Token Consumption** | Prompt: [P], Completion: [C], Total: [T] |
+| **Failure Diagnostics** | [Failure analysis or '0 failures recorded in 7 days'] |
+| **Recommendations** | [1-2 concise actionable suggestions] |
 """
 
 # Private tools schema for OpenAI-compatible Nebius execution
@@ -301,14 +314,16 @@ class AdminAgent:
             except Exception:
                 failures = 0
 
-        status_str = f"ATTENTION REQUIRED ({failures} failures detected)" if failures > 0 else "HEALTHY (0 failures detected)"
+        status_str = f"ATTENTION REQUIRED - {failures} failures detected" if failures > 0 else "HEALTHY - All telemetry metrics within nominal bounds"
         return (
-            "# Administrative & Operations Health Report\n\n"
-            "### 1. Executive Verdict & System Health\n"
-            f"**Operational Status:** {status_str}\n"
-            "The system execution telemetry audit was executed successfully.\n\n"
-            "### 2. Telemetry & Retention Summary\n"
-            f"{prompt_text}\n"
+            "# ✅ Administrative & Operations Audit\n\n"
+            "| Metric Category | Operational Telemetry & Health Data |\n"
+            "| :--- | :--- |\n"
+            f"| **System Verdict** | {status_str} |\n"
+            "| **Data Retention** | Maintenance audit executed successfully (15-day retention window) |\n"
+            f"| **Operational Telemetry** | Active window: 7 days |\n"
+            f"| **Failure Diagnostics** | {failures} failure(s) recorded |\n"
+            "| **Recommendations** | System operating nominally; continue regular automated pruning audits |\n"
         )
 
     async def run_maintenance(
@@ -375,12 +390,18 @@ class AdminAgent:
                 f"Operational Telemetry & Retention Audit for session_tasks:\n"
                 f"```json\n{json.dumps(telemetry_payload, indent=2)}\n```\n\n"
                 "You have access to ADMIN_TOOLS (`search_context7` and `search_web`). "
-                "If there are any recent failures or operational anomalies in the telemetry, use these tools to investigate "
-                "root causes and documentation, and provide concrete diagnostic suggestions and administrative recommendations at the end.\n"
-                "Synthesize the comprehensive administrative health report following the mandatory structure."
+                "If there are any recent failures or anomalies, use these tools to investigate root causes. "
+                "Synthesize the complete audit into the mandatory SINGLE Markdown Data Table format starting with '# ✅ Administrative & Operations Audit'. "
+                "Report all metrics accurately without omitting any telemetry figures."
             )
 
             # Step 5: Model execution with tool dispatch
+            logger.info(
+                "Invoking %s model (%s) for admin telemetry report synthesis (job_id=%s)",
+                active_provider,
+                active_model,
+                job_id,
+            )
             if active_provider == "gemini":
                 report, tokens = await self._execute_gemini_report(user_prompt=user_prompt, model=active_model)
             else:
@@ -407,6 +428,17 @@ class AdminAgent:
                     "telemetry_days": days,
                     "provider": active_provider,
                 },
+            )
+
+            logger.info(
+                "✅ Admin maintenance job %s completed successfully in %d ms (model=%s, tokens: prompt=%d completion=%d total=%d, pruned %d records, status=success)",
+                job_id,
+                duration_ms,
+                active_model,
+                tokens.get("prompt", 0),
+                tokens.get("completion", 0),
+                tokens.get("total", 0),
+                deleted_count,
             )
 
             return {

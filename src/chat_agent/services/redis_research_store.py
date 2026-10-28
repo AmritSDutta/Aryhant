@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+import hashlib
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_KEY_PREFIX: str = "aryhant:"
 _IN_MEMORY_JOBS: dict[str, str] = {}
+_IN_MEMORY_INDEX: dict[str, str] = {}
 _IN_MEMORY_CAP: int = 500
 _store_instance: RedisResearchStore | None = None
 
@@ -76,6 +78,73 @@ class RedisResearchStore:
             oldest_key = next(iter(_IN_MEMORY_JOBS))
             _IN_MEMORY_JOBS.pop(oldest_key, None)
         _IN_MEMORY_JOBS[key] = payload
+
+        if job.channel_id and (job.thread_ts or job.topic):
+            await self.index_job(
+                channel_id=job.channel_id,
+                thread_ts=job.thread_ts,
+                user_id=job.user_id,
+                topic=job.topic,
+                job_id=job.job_id,
+            )
+
+    async def index_job(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        user_id: str,
+        topic: str,
+        job_id: str,
+    ) -> None:
+        """Map thread and user topic to job_id for deterministic resume lookups."""
+        client = self._get_client()
+        keys_to_set: list[str] = []
+        if channel_id and thread_ts:
+            keys_to_set.append(f"{REDIS_KEY_PREFIX}thread_job:{channel_id}:{thread_ts}")
+        if user_id and topic:
+            clean_topic = topic.strip().lower()
+            topic_hash = hashlib.sha256(clean_topic.encode("utf-8")).hexdigest()[:16]
+            keys_to_set.append(f"{REDIS_KEY_PREFIX}user_topic_job:{user_id}:{topic_hash}")
+
+        for k in keys_to_set:
+            if client:
+                try:
+                    await client.set(k, job_id, ex=self.ttl_sec)
+                except Exception as exc:
+                    logger.debug("Failed to set Redis job index %s: %s", k, exc)
+            if len(_IN_MEMORY_INDEX) >= _IN_MEMORY_CAP:
+                oldest = next(iter(_IN_MEMORY_INDEX))
+                _IN_MEMORY_INDEX.pop(oldest, None)
+            _IN_MEMORY_INDEX[k] = job_id
+
+    async def find_active_job(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        user_id: str,
+        topic: str,
+    ) -> str | None:
+        """Resolve active job_id for a given thread or user topic."""
+        client = self._get_client()
+        keys_to_check: list[str] = []
+        if channel_id and thread_ts:
+            keys_to_check.append(f"{REDIS_KEY_PREFIX}thread_job:{channel_id}:{thread_ts}")
+        if user_id and topic:
+            clean_topic = topic.strip().lower()
+            topic_hash = hashlib.sha256(clean_topic.encode("utf-8")).hexdigest()[:16]
+            keys_to_check.append(f"{REDIS_KEY_PREFIX}user_topic_job:{user_id}:{topic_hash}")
+
+        for k in keys_to_check:
+            if client:
+                try:
+                    val = await client.get(k)
+                    if val:
+                        return val
+                except Exception as exc:
+                    logger.debug("Failed to get Redis job index %s: %s", k, exc)
+            if k in _IN_MEMORY_INDEX:
+                return _IN_MEMORY_INDEX[k]
+        return None
 
     async def get_job(self, job_id: str) -> ResearchJobState | None:
         """Retrieve research job state by ID."""

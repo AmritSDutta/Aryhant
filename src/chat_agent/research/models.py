@@ -36,6 +36,14 @@ class ResearchSource(BaseModel):
     provider: str = ""
 
 
+class ToolOutputEntry(BaseModel):
+    """Cached execution result for an individual intelligence or generation tool."""
+    status: Literal["ok", "failed", "skipped"] = "ok"
+    fetched_at: float = 0.0
+    data: Any = None
+    error: str = ""
+
+
 class ModelUsage(BaseModel):
     """Token metrics and cost estimation for an individual model execution."""
     model_name: str
@@ -78,6 +86,9 @@ class ResearchJobState(BaseModel):
     pdf_path: str = ""
     word_count: int = 0
     token_economics: TokenEconomics = Field(default_factory=TokenEconomics)
+    checkpoint: str = "initial"
+    attempt: int = 1
+    tool_outputs: dict[str, ToolOutputEntry] = Field(default_factory=dict)
     error: str = ""
     created_at: float = 0.0
     updated_at: float = 0.0

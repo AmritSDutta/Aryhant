@@ -232,10 +232,15 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
             async def _run_http_admin() -> None:
                 try:
                     report_data = await get_admin_agent().run_maintenance(days=7, prune_days=15, user_id=user_id_key)
+                    raw_report = report_data.get("report", "✅ Administrative maintenance completed successfully.")
+                    from chat_agent.utils.text_formatter import format_human_readable_text
+                    humanized = format_human_readable_text(raw_report)
+                    post_data = generate_slack_post(humanized)
                     await post_slack_message(
                         channel=channel,
                         thread_ts=target_thread,
-                        text=report_data.get("report", "Administrative maintenance finished."),
+                        text=post_data["text"],
+                        blocks=post_data.get("blocks"),
                     )
                 except Exception as e_adm:
                     logger.error("Slack HTTP admin maintenance failed: %s", e_adm, exc_info=True)

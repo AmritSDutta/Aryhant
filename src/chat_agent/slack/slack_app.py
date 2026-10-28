@@ -115,6 +115,48 @@ def _register_handlers(app: Any) -> None:
         _BACKGROUND_TASKS.add(task)
         task.add_done_callback(_BACKGROUND_TASKS.discard)
 
+    async def _dispatch_slash_admin_command(
+        ack: Any,
+        body: dict[str, Any],
+        client: Any,
+        command: str,
+    ) -> None:
+        user_id = body.get("user_id") or "slack-user"
+        user_id_key = f"slack:{user_id}"
+        is_allowed, _, _, email = await check_slack_authorization(client, user_id, notify_on_deny=False)
+        if not is_allowed:
+            logger.warning("Access denied for command %s from user %s (email: %r)", command, user_id, email)
+            await ack(POLITE_DENIAL_MESSAGE)
+            return
+        await ack("⏳ *Running administrative audit & data retention maintenance...*")
+        channel_id = body.get("channel_id") or ""
+
+        from chat_agent.agents.admin_agent import get_admin_agent
+        from chat_agent.slack.post_generator import generate_slack_post
+        from chat_agent.utils.text_formatter import format_human_readable_text
+
+        async def _run_slash_admin_job() -> None:
+            try:
+                report_data = await get_admin_agent().run_maintenance(days=7, prune_days=15, user_id=user_id_key)
+                raw_report = report_data.get("report", "✅ Administrative maintenance completed successfully.")
+                humanized = format_human_readable_text(raw_report)
+                post_data = generate_slack_post(humanized)
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text=post_data["text"],
+                    blocks=post_data.get("blocks"),
+                )
+            except Exception as e_adm:
+                logger.error("Slack slash admin background job failed: %s", e_adm, exc_info=True)
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text=f"⚠️ Administrative maintenance failed: {e_adm}",
+                )
+
+        adm_task = asyncio.create_task(_run_slash_admin_job())
+        _BACKGROUND_TASKS.add(adm_task)
+        adm_task.add_done_callback(_BACKGROUND_TASKS.discard)
+
     @app.command("/research")
     async def on_research_command(ack: Any, body: dict[str, Any], client: Any) -> None:
         await _dispatch_slash_research_command(ack, body, client, "/research")
@@ -122,6 +164,14 @@ def _register_handlers(app: Any) -> None:
     @app.command("/deliberate")
     async def on_deliberate_command(ack: Any, body: dict[str, Any], client: Any) -> None:
         await _dispatch_slash_research_command(ack, body, client, "/deliberate")
+
+    @app.command("/admin")
+    async def on_admin_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await _dispatch_slash_admin_command(ack, body, client, "/admin")
+
+    @app.command("/audit")
+    async def on_audit_command(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await _dispatch_slash_admin_command(ack, body, client, "/audit")
 
     @app.action("delete_memory_action")
     async def on_delete_memory(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -254,13 +304,20 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
         )
         target_thread = thread_ts or msg_ts
 
+        from chat_agent.slack.post_generator import generate_slack_post
+        from chat_agent.utils.text_formatter import format_human_readable_text
+
         async def _run_slack_admin() -> None:
             try:
                 report_data = await get_admin_agent().run_maintenance(days=7, prune_days=15, user_id=user_id_key)
+                raw_report = report_data.get("report", "✅ Administrative maintenance completed successfully.")
+                humanized = format_human_readable_text(raw_report)
+                post_data = generate_slack_post(humanized)
                 await app.client.chat_postMessage(
                     channel=channel,
                     thread_ts=target_thread,
-                    text=report_data.get("report", "Administrative maintenance finished."),
+                    text=post_data["text"],
+                    blocks=post_data.get("blocks"),
                 )
             except Exception as e_adm:
                 logger.error("Slack admin maintenance background job failed: %s", e_adm, exc_info=True)

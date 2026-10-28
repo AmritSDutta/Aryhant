@@ -16,6 +16,10 @@ from chat_agent.config import settings
 from chat_agent.infographics.notes_builder import get_reports_dir
 from chat_agent.research.dispatcher import release_user_job_slot
 from chat_agent.research.engine import gather_research_intelligence, generate_subqueries
+from chat_agent.research.faq_engine import generate_topic_faqs
+from chat_agent.research.intake import formulate_scope, is_clear_scope, render_scope_notice
+from chat_agent.research.jev_validator import evaluate_report_quality
+from chat_agent.research.safety_guard import evaluate_research_safety
 from chat_agent.research.models import (
     ModelUsage,
     ResearchJobState,
@@ -197,78 +201,155 @@ class DualResearchAgent:
         client: Any,
     ) -> None:
         """Run the complete research or deliberation pipeline."""
+        start_ts_ms = int(time.time() * 1000)
         is_tech = command == "/research"
         mode = ResearchMode.TECHNICAL if is_tech else ResearchMode.DELIBERATE
         target_words = 2500 if is_tech else 1500
-
-        job = ResearchJobState(
-            job_id=job_id,
-            command="/research" if is_tech else "/deliberate",
-            topic=topic,
-            mode=mode,
-            target_word_count=target_words,
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-            user_id=user_id,
-            status=TaskStatus.IN_PROGRESS,
-            todos=initialize_default_todos(mode),
-            queries=generate_subqueries(topic, mode),
-            created_at=time.time(),
-        )
-
+        job: ResearchJobState | None = None
         status_msg_ts = ""
+
         try:
-            blocks = render_slack_todo_board(job)
-            post_kwargs: dict[str, Any] = {
-                "channel": channel_id,
-                "text": f"Started {command} for `{topic}`",
-                "blocks": blocks,
-            }
-            if thread_ts:
-                post_kwargs["thread_ts"] = thread_ts
-            resp = await client.chat_postMessage(**post_kwargs)
-            status_msg_ts = resp.get("ts") or ""
-            job.status_msg_ts = status_msg_ts
-        except Exception as post_err:
-            logger.warning("Failed to post initial Slack status board: %s", post_err)
+            # Deterministic resume lookup in Redis index
+            active_job_id = await self.store.find_active_job(channel_id, thread_ts, user_id, topic)
+            if active_job_id:
+                cached_job = await self.store.get_job(active_job_id)
+                if cached_job and cached_job.status != TaskStatus.FAILED:
+                    job_id = cached_job.job_id
+                    job = cached_job
+                    status_msg_ts = job.status_msg_ts or ""
 
-        await self.store.save_job(job)
-        start_ts_ms = int(time.time() * 1000)
-        try:
-            from chat_agent.services.session_task_service import get_session_task_service
+                    # Short-circuit completed jobs on resume
+                    if job.status == TaskStatus.COMPLETED and job.pdf_path:
+                        target_thread = thread_ts or status_msg_ts or ""
+                        if client and channel_id:
+                            filename = os.path.basename(job.pdf_path)
+                            summary_text = job.executive_summary[:1500] if job.executive_summary else "Completed research."
+                            completed_notice = (
+                                f"✅ *Research already completed for this topic:* `{filename}`\n\n"
+                                f"*{'Executive Summary' if is_tech else 'Executive Verdict'}:*\n{summary_text}"
+                            )
+                            post_kw: dict[str, Any] = {"channel": channel_id, "text": completed_notice}
+                            if target_thread:
+                                post_kw["thread_ts"] = target_thread
+                            try:
+                                await client.chat_postMessage(**post_kw)
+                            except Exception:
+                                pass
+                        return
 
-            await get_session_task_service().acreate_task(
-                task_id=job_id,
-                session_id=job_id,
-                user_id=user_id,
-                task_type="research" if is_tech else "deliberate",
-                provider=getattr(settings, "MODEL_PROVIDER", "nebius"),
-                status="in_progress",
-            )
-        except Exception as reg_err:
-            logger.warning("Failed to register research session task %s: %s", job_id, reg_err)
+            # Pre-flight JEV safety & injection guard
+            safety = await evaluate_research_safety(topic=topic, user_id=user_id, job_id=job_id)
+            if not safety.is_safe:
+                denial_text = (
+                    "⚠️ *Request Denied:* I cannot process this research topic as it involves "
+                    "restricted directives, unauthorized access patterns, or safety policy violations."
+                )
+                target_thread = thread_ts or ""
+                if client and channel_id:
+                    post_kw: dict[str, Any] = {"channel": channel_id, "text": denial_text}
+                    if target_thread:
+                        post_kw["thread_ts"] = target_thread
+                    try:
+                        await client.chat_postMessage(**post_kw)
+                    except Exception:
+                        pass
+                return
 
-        async def _update_slack(task_id: str, status: TaskStatus, details: str = "") -> None:
-            updated_job = await self.store.update_todo_status(job_id, task_id, status, details, existing_job=job)
-            display_job = updated_job or job
-            if client and channel_id and status_msg_ts:
+            valid_images = [a for a in attachments if a[1].startswith("image/")]
+            scope_data = formulate_scope(topic, mode)
+            # Only post 30s scope card if job is fresh (not resuming an in-progress job)
+            is_resumed = job is not None and job.checkpoint != "initial"
+            if not is_resumed and not is_clear_scope(topic, bool(valid_images)):
+                notice = render_scope_notice(scope_data, wait_sec=30)
+                target_thread = thread_ts or ""
+                if client and channel_id:
+                    post_kw = {"channel": channel_id, "text": notice}
+                    if target_thread:
+                        post_kw["thread_ts"] = target_thread
+                    try:
+                        await client.chat_postMessage(**post_kw)
+                    except Exception:
+                        pass
+                await asyncio.sleep(30)
+
+            if job is None:
+                job = ResearchJobState(
+                    job_id=job_id,
+                    command="/research" if is_tech else "/deliberate",
+                    topic=topic,
+                    mode=mode,
+                    target_word_count=target_words,
+                    channel_id=channel_id,
+                    thread_ts=thread_ts,
+                    user_id=user_id,
+                    status=TaskStatus.IN_PROGRESS,
+                    todos=initialize_default_todos(mode),
+                    queries=generate_subqueries(topic, mode),
+                    created_at=time.time(),
+                )
+
+            if not status_msg_ts:
                 try:
-                    await client.chat_update(
-                        channel=channel_id,
-                        ts=status_msg_ts,
-                        text=f"Progress update for {command}",
-                        blocks=render_slack_todo_board(display_job),
-                    )
-                except Exception as update_err:
-                    logger.debug("Slack chat_update notice: %s", update_err)
+                    blocks = render_slack_todo_board(job)
+                    post_kwargs: dict[str, Any] = {
+                        "channel": channel_id,
+                        "text": f"Started {command} for `{topic}`",
+                        "blocks": blocks,
+                    }
+                    if thread_ts:
+                        post_kwargs["thread_ts"] = thread_ts
+                    resp = await client.chat_postMessage(**post_kwargs)
+                    status_msg_ts = resp.get("ts") or ""
+                    job.status_msg_ts = status_msg_ts
+                except Exception as post_err:
+                    logger.warning("Failed to post initial Slack status board: %s", post_err)
 
-        try:
+            await self.store.save_job(job)
+            try:
+                from chat_agent.services.session_task_service import get_session_task_service
+
+                await get_session_task_service().acreate_task(
+                    task_id=job_id,
+                    session_id=job_id,
+                    user_id=user_id,
+                    task_type="research" if is_tech else "deliberate",
+                    provider=getattr(settings, "MODEL_PROVIDER", "nebius"),
+                    status="in_progress",
+                )
+            except Exception as reg_err:
+                logger.warning("Failed to register research session task %s: %s", job_id, reg_err)
+
+            async def _emit_internal_notice(msg: str) -> None:
+                target_thread = thread_ts or status_msg_ts
+                if client and channel_id and target_thread:
+                    try:
+                        await client.chat_postMessage(
+                            channel=channel_id,
+                            thread_ts=target_thread,
+                            text=f"⚙️ _[INTERNAL] {msg}_",
+                        )
+                    except Exception as emit_err:
+                        logger.debug("Slack internal notice failed: %s", emit_err)
+
+            async def _update_slack(task_id: str, status: TaskStatus, details: str = "") -> None:
+                updated_job = await self.store.update_todo_status(job_id, task_id, status, details, existing_job=job)
+                display_job = updated_job or job
+                if client and channel_id and status_msg_ts:
+                    try:
+                        await client.chat_update(
+                            channel=channel_id,
+                            ts=status_msg_ts,
+                            text=f"Progress update for {command}",
+                            blocks=render_slack_todo_board(display_job),
+                        )
+                    except Exception as update_err:
+                        logger.debug("Slack chat_update notice: %s", update_err)
+
             # Milestone 1: Visual Inspection & Planning
             await _update_slack("plan", TaskStatus.IN_PROGRESS, "Inspecting visual evidence & planning")
             visual_notes = ""
             saved_image_paths: list[str] = []
 
-            valid_images = [a for a in attachments if a[1].startswith("image/")]
             if valid_images:
                 visual_notes = await self._inspect_visual_attachments(
                     topic,
@@ -285,11 +366,21 @@ class DualResearchAgent:
 
             await _update_slack("plan", TaskStatus.COMPLETED)
 
-            # Milestone 2: Multi-Source Intelligence Gathering
-            await _update_slack("gather", TaskStatus.IN_PROGRESS, "Querying Google AI Overview & Tavily")
+            # Milestone 2: Multi-Source Intelligence Gathering & Concurrent FAQ
+            await _update_slack("gather", TaskStatus.IN_PROGRESS, "Querying Google AI Overview, Tavily & FAQs")
 
             async def _on_tavily_status(msg: str) -> None:
                 await _update_slack("gather", TaskStatus.IN_PROGRESS, msg)
+
+            faq_task = asyncio.create_task(
+                generate_topic_faqs(
+                    topic=topic,
+                    mode=mode,
+                    cached_entry=job.tool_outputs.get("faq"),
+                    session_id=job_id,
+                    user_id=user_id,
+                )
+            )
 
             intel = await gather_research_intelligence(
                 topic=topic,
@@ -298,8 +389,18 @@ class DualResearchAgent:
                 user_id=user_id,
                 visual_notes=visual_notes,
                 on_status_update=_on_tavily_status,
+                cached_tool_outputs=job.tool_outputs,
             )
             job.sources = intel.get("sources", [])
+            if "tool_outputs" in intel:
+                job.tool_outputs.update(intel["tool_outputs"])
+
+            faq_text, faq_entry = await faq_task
+            job.tool_outputs["faq"] = faq_entry
+            if faq_text:
+                intel["dossier"] = intel.get("dossier", "") + f"\n\n### Frequently Asked Questions\n{faq_text}"
+
+            await _emit_internal_notice("Checkpoint (Gathering): 4-stream intelligence & FAQs cached to Redis (24h TTL)")
             await _update_slack("gather", TaskStatus.COMPLETED)
 
             # Milestone 3 (Technical only): Sandbox Verification
@@ -331,29 +432,52 @@ class DualResearchAgent:
                 else:
                     await _update_slack("sandbox", TaskStatus.COMPLETED, "skipped (no verified code snippet)")
 
-            # Milestone 4: Long-Form Synthesis
-            await _update_slack("synthesize", TaskStatus.IN_PROGRESS, f"Drafting ~{target_words} words")
-            current_date_str = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%B %Y")
-            base_prompt = TECHNICAL_SYSTEM_PROMPT if is_tech else DELIBERATION_SYSTEM_PROMPT
-            system_prompt = base_prompt.replace("{current_date}", current_date_str)
-            user_synthesis_prompt = (
-                f"Topic: {topic}\n\n"
-                f"Evidence Dossier:\n{intel.get('dossier', '')}\n\n"
-                f"Synthesize the complete publication following the mandatory structure (~{target_words} words)."
-            )
+            # Milestone 4: Long-Form Synthesis with JEV Quality Validation Loop
+            max_attempts = 2
+            raw_report = ""
+            critique_directive = ""
+            for attempt in range(1, max_attempts + 1):
+                job.attempt = attempt
+                attempt_str = f" (Attempt {attempt}/{max_attempts})" if max_attempts > 1 else ""
+                await _update_slack("synthesize", TaskStatus.IN_PROGRESS, f"Drafting ~{target_words} words{attempt_str}")
+                current_date_str = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%B %Y")
+                base_prompt = TECHNICAL_SYSTEM_PROMPT if is_tech else DELIBERATION_SYSTEM_PROMPT
+                system_prompt = base_prompt.replace("{current_date}", current_date_str)
 
-            runner = get_model_runner()
-            synthesis_content = types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=user_synthesis_prompt)],
-            )
-            raw_report = await runner.run(
-                user_id=user_id,
-                session_id=f"synth-{job_id}",
-                content=synthesis_content,
-                system_instruction=system_prompt,
-                enable_tools=False,
-            )
+                prompt_parts = [f"Topic: {topic}\n\nEvidence Dossier:\n{intel.get('dossier', '')}"]
+                if critique_directive:
+                    prompt_parts.append(f"CRITIQUE FROM PREVIOUS ATTEMPT:\n{critique_directive}\nYou MUST address these specific deficiencies in this revision.")
+                prompt_parts.append(f"Synthesize the complete publication following the mandatory structure (~{target_words} words).")
+                user_synthesis_prompt = "\n\n".join(prompt_parts)
+
+                runner = get_model_runner()
+                synthesis_content = types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_synthesis_prompt)],
+                )
+                raw_report = await runner.run(
+                    user_id=user_id,
+                    session_id=f"synth-{job_id}-a{attempt}",
+                    content=synthesis_content,
+                    system_instruction=system_prompt,
+                    enable_tools=False,
+                )
+
+                jev_res = await evaluate_report_quality(
+                    topic=topic,
+                    criteria=scope_data.get("success_criteria", []),
+                    report_text=raw_report,
+                    mode=mode,
+                )
+
+                if jev_res.passed or attempt == max_attempts:
+                    pass_label = f"score {jev_res.composite_score:.2f} >= 0.75" if jev_res.passed else f"final attempt {attempt}"
+                    await _emit_internal_notice(f"Checkpoint (JEV Evaluation): {pass_label} (Passed)")
+                    break
+                else:
+                    await _emit_internal_notice(f"JEV score {jev_res.composite_score:.2f} < 0.75. Re-synthesizing with critique...")
+                    await _update_slack("synthesize", TaskStatus.IN_PROGRESS, f"Refining draft with JEV critique (score {jev_res.composite_score:.2f})")
+                    critique_directive = jev_res.critique
 
             word_count = len(re.findall(r"\b\w+\b", raw_report))
             job.full_report_markdown = raw_report
@@ -418,48 +542,50 @@ class DualResearchAgent:
 
         except Exception as job_err:
             logger.error("Job %s (%s) encountered failure: %s", job_id, command, job_err, exc_info=True)
-            job.error = str(job_err)
-            job.status = TaskStatus.FAILED
-            await self.store.save_job(job)
-            if client and channel_id and status_msg_ts:
+            if job is not None:
+                job.error = str(job_err)
+                job.status = TaskStatus.FAILED
+                await self.store.save_job(job)
+                if client and channel_id and status_msg_ts:
+                    try:
+                        await client.chat_update(
+                            channel=channel_id,
+                            ts=status_msg_ts,
+                            text=f"Error executing {command}",
+                            blocks=render_slack_todo_board(job),
+                        )
+                    except Exception:
+                        pass
+        finally:
+            await release_user_job_slot(user_id)
+            if job is not None:
                 try:
-                    await client.chat_update(
-                        channel=channel_id,
-                        ts=status_msg_ts,
-                        text=f"Error executing {command}",
-                        blocks=render_slack_todo_board(job),
+                    from chat_agent.services.session_task_service import get_session_task_service
+
+                    duration_ms = int(time.time() * 1000) - start_ts_ms
+                    final_status = "completed" if job.status == TaskStatus.COMPLETED else "failed"
+                    tot_in = job.token_economics.total_input_tokens if job.token_economics else 0
+                    tot_out = job.token_economics.total_output_tokens if job.token_economics else 0
+                    tot_all = job.token_economics.total_tokens if job.token_economics else 0
+                    active_prov = getattr(settings, "MODEL_PROVIDER", "nebius").lower()
+                    active_model = (
+                        getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
+                        if active_prov == "nebius"
+                        else getattr(settings, "model", "gemini-flash-lite-latest")
+                    )
+                    await get_session_task_service().acomplete_task(
+                        task_id=job_id,
+                        status=final_status,
+                        prompt_tokens=tot_in,
+                        completion_tokens=tot_out,
+                        total_tokens=tot_all,
+                        duration_ms=duration_ms,
+                        model_name=active_model,
+                        error_message=job.error or None,
+                        metadata={"topic": topic, "word_count": job.word_count},
                     )
                 except Exception:
                     pass
-        finally:
-            await release_user_job_slot(user_id)
-            try:
-                from chat_agent.services.session_task_service import get_session_task_service
-
-                duration_ms = int(time.time() * 1000) - start_ts_ms
-                final_status = "completed" if job.status == TaskStatus.COMPLETED else "failed"
-                tot_in = job.token_economics.total_input_tokens if job.token_economics else 0
-                tot_out = job.token_economics.total_output_tokens if job.token_economics else 0
-                tot_all = job.token_economics.total_tokens if job.token_economics else 0
-                active_prov = getattr(settings, "MODEL_PROVIDER", "nebius").lower()
-                active_model = (
-                    getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
-                    if active_prov == "nebius"
-                    else getattr(settings, "model", "gemini-flash-lite-latest")
-                )
-                await get_session_task_service().acomplete_task(
-                    task_id=job_id,
-                    status=final_status,
-                    prompt_tokens=tot_in,
-                    completion_tokens=tot_out,
-                    total_tokens=tot_all,
-                    duration_ms=duration_ms,
-                    model_name=active_model,
-                    error_message=job.error or None,
-                    metadata={"topic": topic, "word_count": job.word_count},
-                )
-            except Exception:
-                pass
 
 
 _agent_singleton: DualResearchAgent | None = None

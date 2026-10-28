@@ -193,11 +193,12 @@ def test_dynamic_fallback_report_status() -> None:
 
     healthy_msg = [{'content': '{"failure_count": 0}'}]
     healthy_report = agent._build_deterministic_report(healthy_msg)
-    assert "Operational Status:** HEALTHY (0 failures detected)" in healthy_report
+    assert "HEALTHY - All telemetry metrics within nominal bounds" in healthy_report
+    assert "✅ Administrative & Operations Audit" in healthy_report
 
     failing_msg = [{'content': '{"failure_count": 4}'}]
     failing_report = agent._build_deterministic_report(failing_msg)
-    assert "Operational Status:** ATTENTION REQUIRED (4 failures detected)" in failing_report
+    assert "ATTENTION REQUIRED - 4 failures detected" in failing_report
 
 @pytest.mark.asyncio
 async def test_admin_agent_nebius_tool_dispatch_loop(mock_db_service: SessionTaskService) -> None:

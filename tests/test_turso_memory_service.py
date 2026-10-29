@@ -365,3 +365,15 @@ def test_user_profile_email_persistence(memory_service: TursoMemoryService):
     assert row[2] == "student@school.org"
 
 
+def test_turso_pre_warm_success(memory_service: TursoMemoryService):
+    """Verify pre_warm executes probe query and returns True."""
+    assert memory_service.pre_warm() is True
+
+
+@pytest.mark.asyncio
+async def test_turso_apre_warm_async(memory_service: TursoMemoryService):
+    """Verify apre_warm runs asynchronously and returns True."""
+    assert await memory_service.apre_warm() is True
+
+
+

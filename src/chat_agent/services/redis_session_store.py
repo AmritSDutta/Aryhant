@@ -74,12 +74,26 @@ class RedisSessionStore:
                     decode_responses=True,
                     socket_timeout=5.0,
                     socket_connect_timeout=5.0,
+                    socket_keepalive=True,
                     health_check_interval=30,
                 )
             except Exception as exc:
                 logger.warning("Failed to initialize Redis client (%s). Using in-memory fallback.", exc)
                 return None
         return self._client
+
+    async def pre_warm(self) -> bool:
+        """Pre-warm the Redis connection pool with an initial ping; returns True on success."""
+        client = self._get_client()
+        if not client:
+            return False
+        try:
+            await client.ping()
+            logger.info("Redis session store pre-warmed successfully.")
+            return True
+        except Exception as exc:
+            logger.warning("Redis pre-warm ping failed (%s). Using in-memory fallback if needed.", exc)
+            return False
 
     async def get_history(self, session_id: str) -> list[dict[str, str]]:
         """Fetch the most recent turns for a session (bounded to sliding window cap)."""

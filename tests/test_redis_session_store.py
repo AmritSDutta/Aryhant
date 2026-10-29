@@ -160,4 +160,37 @@ def test_redis_key_prefix_enforcement():
     assert k4.startswith(REDIS_KEY_PREFIX)
 
 
+@pytest.mark.asyncio
+async def test_redis_pre_warm_success():
+    """Verify pre_warm executes client ping and returns True."""
+    mock_redis = MagicMock()
+    mock_redis.ping = AsyncMock(return_value=True)
+
+    store = RedisSessionStore(redis_url="redis://localhost:6379")
+    store._client = mock_redis
+
+    assert await store.pre_warm() is True
+    mock_redis.ping.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_redis_pre_warm_failure_graceful():
+    """Verify pre_warm handles connection errors gracefully and returns False."""
+    mock_redis = MagicMock()
+    mock_redis.ping = AsyncMock(side_effect=ConnectionError("Connection refused"))
+
+    store = RedisSessionStore(redis_url="redis://localhost:6379")
+    store._client = mock_redis
+
+    assert await store.pre_warm() is False
+
+
+@pytest.mark.asyncio
+async def test_redis_pre_warm_unconfigured():
+    """Verify pre_warm returns False when redis_url is empty."""
+    store = RedisSessionStore(redis_url="")
+    assert await store.pre_warm() is False
+
+
+
 

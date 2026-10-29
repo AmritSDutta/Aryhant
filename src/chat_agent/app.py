@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Security, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +29,8 @@ from chat_agent.webhooks import authorize_webhook
 setup_logging()
 logger = logging.getLogger("chat_agent.app")
 
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
 
 @asynccontextmanager
 async def lifespan(app_ins: FastAPI):
@@ -38,8 +42,35 @@ async def lifespan(app_ins: FastAPI):
             await get_jwks()
         except Exception as e:
             logger.warning("Auth0 JWKS prefetch skipped or failed: %s", e)
+
+    async def _pre_warm_backends() -> None:
+        if settings.ARYHANT_REDIS_URL:
+            try:
+                from chat_agent.services.redis_session_store import get_redis_session_store
+
+                await get_redis_session_store().pre_warm()
+            except Exception as e:
+                logger.warning("Redis session store pre-warm skipped or failed: %s", e)
+
+        if settings.ARYHANT_TURSO_DATABASE_URL or settings.TURSO_LOCAL_DB_PATH:
+            try:
+                from chat_agent.services.turso_memory_service import get_turso_memory_service
+
+                await get_turso_memory_service().apre_warm()
+            except Exception as e:
+                logger.warning("Turso memory service pre-warm skipped or failed: %s", e)
+
+    prewarm_task = asyncio.create_task(_pre_warm_backends())
+    _BACKGROUND_TASKS.add(prewarm_task)
+    prewarm_task.add_done_callback(_BACKGROUND_TASKS.discard)
     yield
     logger.info("Shutting down %s", app_ins.title)
+    try:
+        from chat_agent.services.redis_session_store import get_redis_session_store
+
+        await get_redis_session_store().close()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -106,9 +137,9 @@ async def health() -> dict:
     ],
 )
 async def chat(
-    payload: ChatRequest,
-    auth_info: dict = Depends(auth0.require_auth()),
-    token: HTTPAuthorizationCredentials | None = Security(HTTPBearer(auto_error=False)),
+        payload: ChatRequest,
+        auth_info: dict = Depends(auth0.require_auth()),
+        token: HTTPAuthorizationCredentials | None = Security(HTTPBearer(auto_error=False)),
 ) -> ChatResponse:
     if settings.REQUIRE_AUTH:
         await get_user_profile(
@@ -119,7 +150,7 @@ async def chat(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Input validation failed: Potentially unsafe content detected.",
-            )
+        )
 
     prompt = f"[channel={payload.channel}]\n{payload.message}"
     if not llm_ready():
@@ -127,11 +158,10 @@ async def chat(
             "Demo mode (no USER_LLM_API_KEY). "
             "In Slack, mention the bot or DM it. Email works if EMAIL_ENABLED=true. "
             f"You said: {payload.message[:280]}"
-            )
+        )
         return ChatResponse(reply=reply, model="demo", channel=payload.channel)
     reply = await run_agent(payload.user_id, payload.session_id, prompt)
     return ChatResponse(reply=reply, model=settings.model, channel=payload.channel)
-
 
 
 @app.post("/webhooks/slack", response_model=None)

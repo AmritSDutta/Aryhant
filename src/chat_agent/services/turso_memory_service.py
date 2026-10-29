@@ -237,6 +237,27 @@ class TursoMemoryService:
             except Exception as e:
                 logger.warning("Error closing DB connection for %s memory context: %s", user_id, e)
 
+    def pre_warm(self) -> bool:
+        """Execute a lightweight probe query to establish TLS/TCP connection and warm driver cache."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1;")
+            cursor.fetchone()
+            try:
+                conn.close()
+            except Exception:
+                pass
+            logger.info("Turso memory service pre-warmed successfully.")
+            return True
+        except Exception as exc:
+            logger.warning("Turso memory service pre-warm skipped or failed: %s", exc)
+            return False
+
+    async def apre_warm(self) -> bool:
+        """Async non-blocking version of pre_warm."""
+        return await asyncio.to_thread(self.pre_warm)
+
     async def aget_user_memory_context(self, user_id: str, limit: int = MAX_MEMORY_CONTEXT_ITEMS) -> str:
         """Async non-blocking version of get_user_memory_context."""
         return await asyncio.to_thread(self.get_user_memory_context, user_id, limit)

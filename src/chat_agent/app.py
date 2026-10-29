@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from chat_agent.agents.runner import run_agent
+from chat_agent.communicate.router import router as communicate_router
 from chat_agent.config import (
     llm_ready,
     settings,
@@ -179,3 +180,5 @@ async def slack_events(request: Request, background_tasks: BackgroundTasks) -> d
         return JSONResponse({"error": "Service unavailable"}, status_code=503)
     background_tasks.add_task(handle_slack_payload, payload)
     return {"ok": True}
+
+app.include_router(communicate_router)

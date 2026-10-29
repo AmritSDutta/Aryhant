@@ -3,6 +3,7 @@ export default {
     if (request.method !== "POST") {
       return new Response("ok", { status: 200 });
     }
+    const url = new URL(request.url);
     const body = await request.text();
     let payload = {};
     try {
@@ -16,9 +17,27 @@ export default {
       return Response.json({ challenge: payload.challenge });
     }
 
-    const qstashBase = (env.QSTASH_URL || "https://qstash.upstash.io").replace(/\/$/, "");
-    const qstashUrl = `${qstashBase}/v2/publish/${env.CLOUD_RUN_WEBHOOK}`;
+    // Route by pathname or payload type (Slack vs AgentMail)
+    const isAgentMail =
+      url.pathname.includes("agentmail") ||
+      url.pathname.includes("communicate") ||
+      (typeof payload.event_type === "string" && payload.event_type.startsWith("message."));
+    console.log("isAgentMail: ", isAgentMail);
 
+    const qstashBase = (env.QSTASH_URL || "https://qstash.upstash.io").replace(/\/$/, "");
+
+    let target = env.CLOUD_RUN_WEBHOOK;
+    if (isAgentMail) {
+      if (env.CLOUD_RUN_COMMUNICATE_URL) {
+        target = env.CLOUD_RUN_COMMUNICATE_URL;
+      } else if (env.CLOUD_RUN_BASE_URL) {
+        target = `${env.CLOUD_RUN_BASE_URL.replace(/\/$/, "")}/api/communicate`;
+      } else if (env.CLOUD_RUN_WEBHOOK) {
+        target = env.CLOUD_RUN_WEBHOOK.replace(/\/webhooks\/slack\/?$/, "/api/communicate");
+      }
+    }
+
+    const qstashUrl = `${qstashBase}/v2/publish/${target}`;
     console.log("Publishing to QStash URL:", qstashUrl);
 
     try {
@@ -46,4 +65,3 @@ export default {
     return new Response("ok", { status: 200 });
   },
 };
-

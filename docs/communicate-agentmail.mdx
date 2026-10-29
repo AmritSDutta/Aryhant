@@ -1,0 +1,134 @@
+---
+title: AgentMail Communication Endpoint
+description: Edge-buffered administrative email responder for Cloud Run using Cloudflare Workers, Upstash QStash, and AgentMail.
+---
+
+# AgentMail Communication (`/api/communicate`)
+
+The `/api/communicate` endpoint provides an automated, event-driven email interface for **Aryhant's Administrative & Operations Reporter (Role 4)**. 
+
+It receives inbound emails forwarded from [AgentMail](https://agentmail.to) through an edge-buffered **Cloudflare Worker + Upstash QStash** proxy, validates the sender against an authorization allowlist, audits system telemetry, and synthesizes executive operational reports.
+
+---
+
+## 1. Architecture: Edge Buffering for Cloud Run
+
+Cloud Run containers can scale to zero instances when idle. When an inbound email arrives, container cold starts can take 2–5 seconds, exceeding AgentMail's strict webhook timeout thresholds.
+
+To eliminate timeouts and ensure guaranteed delivery, webhooks pass through an edge-buffered pipeline:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Sender as Inbound Email
+    participant AM as AgentMail Service
+    participant CF as Cloudflare Worker (/agentmail)
+    participant QS as Upstash QStash
+    participant CR as Cloud Run (/api/communicate)
+    participant Comm as Communicate Service (Role 4)
+    participant Admin as SessionTaskService
+
+    Sender->>AM: Send email
+    AM->>CF: POST https://aryhant-xxx.workers.dev/agentmail
+    Note over CF: Immediate HTTP 200 OK (<50ms)
+    CF-->>AM: 200 OK
+    CF->>QS: Forward payload (/v2/publish/CLOUD_RUN_URL/api/communicate)
+    Note over QS: Reliable delivery & cold-start retries
+    QS->>CR: POST /api/communicate with Upstash-Signature
+    CR-->>QS: 200 OK {"ok": true, "status": "queued"}
+    Note over CR: Dispatched via FastAPI BackgroundTasks
+    CR->>Comm: process_communicate_event(payload)
+    alt Unauthorized Sender
+        Comm->>AM: Add label 'unauthorized_sender', remove 'unreplied'
+        Note over Comm: Silently dropped; zero LLM costs
+    else Allowed Sender & Non-Admin Query
+        Comm->>AM: Add label 'ignored_non_admin'
+        Note over Comm: Skipped without reply
+    else Allowed Sender & Admin Query
+        Comm->>Admin: aget_table_metrics(7), adelete_records_older_than(15)
+        Admin-->>Comm: Telemetry metrics & failure diagnostics
+        Comm->>Comm: Generate report (Primary -> Fallback model)
+        Comm->>AM: client.inboxes.messages.reply(message_id, html, text)
+        Comm->>AM: Add label 'replied', remove 'unreplied'
+    end
+```
+
+---
+
+## 2. Multi-Endpoint Cloudflare Edge Worker
+
+The edge worker (`proxies/cloudflare-slack-ack.js`) handles multi-path routing on a single deployed Cloudflare URL:
+
+| Path / Condition | Destination | Purpose |
+| :--- | :--- | :--- |
+| `POST /` or `/slack` | `CLOUD_RUN_WEBHOOK` (`/webhooks/slack`) | Slack URL verification & event queueing |
+| `POST /agentmail` or `/communicate` | `CLOUD_RUN_COMMUNICATE_URL` (`/api/communicate`) | AgentMail webhook instant ACK & QStash forwarding |
+
+> [!NOTE]
+> The Cloudflare Worker intentionally returns HTTP 200 to AgentMail immediately (<50ms) before QStash ingestion to prevent webhook retry storms. In the rare event of an edge forwarding error, the failure is logged to Cloudflare Observability logs.
+
+### Worker Setup in AgentMail Console:
+1. Log into your [AgentMail Dashboard](https://agentmail.to).
+2. Navigate to **Webhooks** ➔ **Create Webhook**.
+3. Set **URL** to:
+   ```text
+   https://<your-worker-name>.workers.dev/agentmail
+   ```
+4. Select Event Types:
+   - `message.received`
+
+---
+
+## 3. Security & Scope Rules
+
+### 1. Fail-Closed Webhook Authentication
+Requests arriving at `POST /api/communicate` must be signed:
+- **Upstash-Signature**: Validated against `QSTASH_CURRENT_SIGNING_KEY` using `@upstash/qstash` receiver.
+- **Shared Secret**: Validated against `ARYHANT_WEBHOOK_SHARED_SECRET` forwarded via `X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret`.
+- **Fail-Closed**: If neither secret is configured on the server, all requests are rejected with `HTTP 503 Service Unavailable`. Invalid credentials return `HTTP 401 Unauthorized`.
+
+### 2. Sender Allowlist Gating
+Before any processing or LLM calls occur, the sender's email address is evaluated against `ARYHANT_ALLOWED_EMAILS`.
+- If unauthorized: **Silently dropped**.
+- The mailbox message is tagged with the `unauthorized_sender` label and `unreplied` is removed.
+- No auto-reply is ever sent to unknown senders, preventing spam amplification and zero token consumption.
+
+### 3. Administrative Query Filter
+The communicator acts strictly as an **Administrative & Operations Reporter** (Role 4):
+- Emails must contain administrative keywords (e.g. `audit`, `status`, `telemetry`, `health`, `metrics`, `prune`, `retention`, `failures`, `performance`).
+- Non-administrative emails from allowed senders are **ignored without reply** and tagged with the `ignored_non_admin` label.
+
+---
+
+## 4. Configuration & Models
+
+Settings are managed via environment variables (or Infisical):
+
+| Environment Variable | Default | Description |
+| :--- | :--- | :--- |
+| `COMMUNICATE_PROVIDER` | `nebius` (or `MODEL_PROVIDER`) | Model provider (`nebius` or `gemini`). |
+| `COMMUNICATE_MODEL` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` / `gemini-flash-lite-latest` | Primary model for synthesizing audit reports. |
+| `COMMUNICATE_FALLBACK_MODEL` | `gpt-6-luna` / `gemini-3.1-flash-lite` | Failover model on rate limits or API outages. |
+| `COMMUNICATE_MAX_THREAD_DEPTH` | `10` | Maximum messages in thread before halting loop responses. |
+| `AGENTMAIL_API_KEY` | `""` | Bearer token for AgentMail SDK operations. |
+| `AGENTMAIL_INBOX_ID` | `""` | Default inbox ID for outbound replies. |
+| `AGENTMAIL_BCC_EMAIL` | `""` | Optional BCC address for monitoring outgoing reports (omitted if empty). |
+
+### Provider-Aware Fallback Routing
+If the primary model encounters a rate limit or API failure, the failover router dynamically dispatches:
+- Gemini models (e.g. `gemini-3.1-flash-lite`) route to the Google GenAI SDK.
+- GPT models (e.g. `gpt-6-luna`) route to OpenAI if `OPENAI_API_KEY` is present, or gracefully fall back to Gemini.
+- Nebius models (`nvidia/*`) route to Nebius TokenFactory API.
+
+---
+
+## 5. AgentMail SDK & Skill Conformance
+
+The implementation conforms to the AgentMail integration rules:
+- **Body Extraction Priority**: Evaluates `extracted_text` ➔ `extracted_html` ➔ `text` ➔ `html`. Prioritizing extracted fields eliminates quoted reply histories and forward noise.
+- **Flexible Thread Inspection**: Thread depth guards safely inspect both SDK objects and raw dictionary mappings.
+- **Message-ID Addressing**: All replies target `message_id`, not `thread_id`.
+- **Subject Parameter**: `reply()` does not supply a `subject` parameter (the thread subject is automatically preserved).
+- **Clean BCC Kwargs**: `bcc` is only passed to the AgentMail API when explicitly configured, preventing `None` serialization errors.
+- **NO_REPLY Protocol**: If an audit conversation has reached a natural conclusion, the LLM emits `NO_REPLY`, and the service labels `llm_no_reply` without dispatching a duplicate email.
+- **Label State Management**: Automatically manages mailbox labels (`replied`, `unreplied`, `ignored_non_admin`, `unauthorized_sender`, `depth_limit_reached`).

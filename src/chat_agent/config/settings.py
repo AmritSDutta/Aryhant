@@ -65,6 +65,11 @@ class Settings(BaseSettings):
 
     # Webhook Integration
     ARYHANT_WEBHOOK_SHARED_SECRET: str = ""
+    # AgentMail Integration
+    ARYHANT_AGENTMAIL_API_KEY: str = ""
+    ARYHANT_AGENTMAIL_EMAILID: str = ""
+    ARYHANT_AGENTMAIL_BCC_EMAIL: str = ""
+
 
     # Email Integration (IMAP / SMTP)
     EMAIL_ENABLED: bool = False
@@ -171,6 +176,22 @@ class Settings(BaseSettings):
     @property
     def aryhant_webhook_shared_secret(self) -> str:
         return self.ARYHANT_WEBHOOK_SHARED_SECRET or os.getenv("ARYHANT_WEBHOOK_SHARED_SECRET", "")
+    @property
+    def aryhant_agentmail_api_key(self) -> str:
+        return self.ARYHANT_AGENTMAIL_API_KEY or os.getenv("ARYHANT_AGENTMAIL_API_KEY", "")
+
+    @property
+    def aryhant_agentmail_emailid(self) -> str:
+        return self.ARYHANT_AGENTMAIL_EMAILID or os.getenv("ARYHANT_AGENTMAIL_EMAILID", "")
+
+    @property
+    def aryhant_agentmail_bcc_email(self) -> str:
+        return self.ARYHANT_AGENTMAIL_BCC_EMAIL or os.getenv("ARYHANT_AGENTMAIL_BCC_EMAIL", "")
+
+    @property
+    def agentmail_ready(self) -> bool:
+        return bool(self.aryhant_agentmail_api_key)
+
 
     @property
     def email_allowed_senders_list(self) -> List[str]:

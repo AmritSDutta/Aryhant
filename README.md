@@ -45,46 +45,46 @@ One multi-path Cloudflare Worker fronts both webhook sources (Slack and AgentMai
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Student as Slack User (mobile / desktop)
+    actor Student as Slack User
     actor Parent as Email Sender
     participant Slack as Slack Events API
     participant AM as AgentMail Inbox
     participant CF as Cloudflare Worker (proxies/cloudflare-slack-ack.js)
     participant QStash as Upstash QStash
-    participant Run as Cloud Run (chat_agent.app:app, scale-to-zero)
+    participant Run as Cloud Run (chat_agent.app:app)
     participant TF as Nebius Token Factory (Nemotron)
-    participant State as Redis sessions and Turso memory
+    participant State as Redis and Turso State
     participant SlackAPI as Slack Web API
     rect rgb(245, 248, 250)
     note over Student,State: Slack path - chat, tutoring, notes and research
-    Student->>Slack: @Aryhant "Generate study notes on Fractions"
+    Student->>Slack: @Aryhant Generate study notes on Fractions
     Slack->>CF: POST / (expects 200 within 3s)
-    CF-->>Slack: HTTP 200 OK (instant ACK <50ms)
+    CF-->>Slack: HTTP 200 OK (instant ACK under 50ms)
     CF->>QStash: Enqueue event
     QStash->>Run: POST /webhooks/slack (retries through cold start)
     Run->>Run: verify QStash signature and shared secret
-    Run-->>QStash: HTTP 200 {"ok": true}
+    Run-->>QStash: HTTP 200 OK
     Run->>State: load 20-turn session, memory, syllabus
-    Run->>TF: run_agent() - chat, vision, tool calls
+    Run->>TF: run_agent - chat, vision, tool calls
     TF-->>Run: reply with get_icse_syllabus and search_web tool results
-    Run->>SlackAPI: chat.postMessage(text_reply, thread_ts)
-    Run->>TF: generate_study_notes_pdf [background thread]
-    TF-->>Run: compiled PDF (ReportLab)
-    Run->>SlackAPI: upload_file_to_slack() -> files.uploadExternal
+    Run->>SlackAPI: chat.postMessage in thread
+    Run->>TF: generate_study_notes_pdf background task
+    TF-->>Run: compiled PDF
+    Run->>SlackAPI: upload PDF via files.uploadExternal
     SlackAPI-->>Student: reply in thread, then PDF study notes
     end
     rect rgb(245, 250, 245)
     note over Parent,State: Email path - AgentMail ops reports
-    Parent->>AM: "Email me a usage audit"
-    AM->>CF: POST /agentmail webhook (message.received)
-    CF-->>AM: HTTP 200 OK (instant ACK <50ms)
+    Parent->>AM: Email me a usage audit
+    AM->>CF: POST /agentmail webhook
+    CF-->>AM: HTTP 200 OK (instant ACK under 50ms)
     CF->>QStash: Enqueue event
     QStash->>Run: POST /api/communicate
-    Run->>Run: verify signature, sender allowlist and admin-keyword gate
-    Run->>State: aget_table_metrics(7), adelete_records_older_than(15)
-    Run->>TF: synthesize ops report (Nemotron-3-Nano-30B)
+    Run->>Run: verify signature, sender allowlist and admin keyword
+    Run->>State: aget_table_metrics and adelete_records_older_than
+    Run->>TF: synthesize ops report via Nemotron-3-Nano-30B
     TF-->>Run: report text
-    Run->>AM: reply by message_id; label replied / unauthorized_sender
+    Run->>AM: reply by message_id with replied or unauthorized label
     AM-->>Parent: audit report email
     end
 ```

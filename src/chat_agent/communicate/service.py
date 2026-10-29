@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from email.utils import parseaddr
 from typing import Any
@@ -58,39 +59,49 @@ def _get_field(obj: Any, key: str, default: Any = "") -> Any:
     return getattr(obj, key, default)
 
 
+_TEMPLATE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "email_format.html"))
+
+
+def _load_email_template() -> str:
+    """Read dedicated HTML email template from disk with embedded fallback."""
+    if os.path.isfile(_TEMPLATE_PATH):
+        try:
+            with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as exc:
+            logger.warning("[Communicate] Could not read %s: %s", _TEMPLATE_PATH, exc)
+    return (
+        '<div style="margin: 0; padding: 24px 12px; width: 100%; min-height: 100vh; background-color: #f6eee3; background: linear-gradient(135deg, #fdfbf7 0%, #f6eee3 50%, #eee1cf 100%); font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #3b2e25;">'
+        '<div style="max-width: 640px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 1px solid #ebdccb;">'
+        '<div style="background-color: #5d4a3b; background: linear-gradient(135deg, #493627 0%, #7c4d25 50%, #a76d2e 100%); padding: 26px 20px; text-align: center;">'
+        '<h1 style="margin: 0; font-size: 26px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; text-align: center;">Aryhant</h1>'
+        '</div>'
+        '<div style="padding: 28px 24px; background-color: #fdfbf7; background: linear-gradient(180deg, #fdfbf7 0%, #f6eee3 100%);">'
+        "<CONTENT>"
+        "</div></div></div>"
+    )
+
+
 def render_email_html(reply_markdown: str) -> str:
-    """Render markdown response into styled HTML for email clients."""
+    """Render markdown response into styled HTML using dedicated email_format.html."""
+    template = _load_email_template()
     converted = markdown.markdown(reply_markdown, extensions=["tables", "fenced_code"])
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body {{
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-    color: #3b2e25;
-    margin: 0;
-    padding: 24px;
-    background-color: #f7efe1;
-    background: linear-gradient(135deg, #fdfbf7 0%, #f6eee3 50%, #eee1cf 100%);
-    min-height: 100vh;
-  }}
-  table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
-  th, td {{ border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }}
-  th {{ background-color: #f3f4f6; font-weight: 600; }}
-  pre {{ background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px; overflow-x: auto; }}
-  code {{ font-family: monospace; font-size: 0.9em; }}
-  .footer {{ margin-top: 32px; font-size: 0.8em; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 8px; }}
-</style>
-</head>
-<body>
-{converted}
-<div class="footer">
-  This is an automated operational report from Aryhant Administrative Agent (Role 4).
-</div>
-</body>
-</html>"""
+    # Format tables with inline borders and colors for universal email client compatibility
+    converted = converted.replace(
+        "<table>",
+        '<table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse; width: 100%; border: 1px solid #ebdccb; margin: 16px 0; font-size: 14px;">',
+    )
+    converted = re.sub(
+        r"<th(?:\s+style=\"[^\"]*\")?>",
+        '<th style="background-color: #f4ece1; color: #493627; font-weight: 600; padding: 8px 12px; border: 1px solid #ebdccb; text-align: left;">',
+        converted,
+    )
+    converted = re.sub(
+        r"<td(?:\s+style=\"[^\"]*\")?>",
+        '<td style="padding: 8px 12px; border: 1px solid #ebdccb; color: #3b2e25; text-align: left;">',
+        converted,
+    )
+    return template.replace("<CONTENT>", converted)
 
 
 async def process_communicate_event(event_payload: dict[str, Any]) -> None:
@@ -253,7 +264,8 @@ async def process_communicate_event(event_payload: dict[str, Any]) -> None:
 
     # ── 8. Dispatch Reply via AgentMail ───────────────────────────────────────
     if not (client and inbox_id and message_id):
-        logger.warning("[Communicate] Missing client or IDs (inbox: %s, msg: %s). Cannot send reply.", inbox_id, message_id)
+        logger.warning("[Communicate] Missing client or IDs (inbox: %s, msg: %s). Cannot send reply.",
+                       inbox_id, message_id)
         return
 
     html_body = render_email_html(reply_text)

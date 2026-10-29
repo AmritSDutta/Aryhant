@@ -10,7 +10,7 @@ from chat_agent.app import app
 from chat_agent.communicate.client import set_agentmail_client
 from chat_agent.communicate.intent import is_administrative_query
 from chat_agent.communicate.llm import generate_communicate_reply
-from chat_agent.communicate.service import process_communicate_event
+from chat_agent.communicate.service import process_communicate_event, render_email_html
 from chat_agent.config import settings
 
 
@@ -117,7 +117,7 @@ async def test_communicate_admin_query_success(mock_agentmail, monkeypatch):
     assert call_kwargs["inbox_id"] == "inbox_123"
     assert call_kwargs["message_id"] == "msg_admin_ok"
     assert "HEALTHY" in call_kwargs["text"]
-    assert "<table>" in call_kwargs["html"]
+    assert "<table" in call_kwargs["html"]
     # bcc should be omitted if unset
     assert "bcc" not in call_kwargs
 
@@ -321,3 +321,20 @@ async def test_communicate_recipient_mismatch_skipped(mock_agentmail, monkeypatc
     # Must be completely skipped: no replies and no label updates
     mock_agentmail.inboxes.messages.reply.assert_not_called()
     mock_agentmail.inboxes.messages.update.assert_not_called()
+
+
+def test_render_email_html_mild_gradient():
+    """Verify that render_email_html loads the template with the central header and mild gradient palette."""
+    rendered = render_email_html("### Operational Status\n\nAll tasks operational.")
+    # Check palette colors
+    assert "#f6eee3" in rendered
+    assert "linear-gradient" in rendered
+    assert "Operational Status" in rendered
+    # Check central header 'Aryhant'
+    assert "<h1" in rendered
+    assert "Aryhant</h1>" in rendered
+    assert "text-align: center" in rendered
+    # Ensure no artificial white card or unwanted banner subtitles were introduced
+    assert "background: #ffffff" not in rendered
+    assert "Autonomous Administrative Report" not in rendered
+

@@ -297,3 +297,27 @@ def test_communicate_endpoint_fail_closed(monkeypatch):
 
     resp = client.post("/api/communicate", json=payload)
     assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_communicate_recipient_mismatch_skipped(mock_agentmail, monkeypatch):
+    """When ARYHANT_AGENTMAIL_EMAILID is configured, emails not addressed to it must be skipped."""
+    monkeypatch.setattr(settings, "ARYHANT_ALLOWED_EMAILS", "admin@amritai.org")
+    monkeypatch.setattr(settings, "ARYHANT_AGENTMAIL_EMAILID", "aryhant@agentmail.to")
+
+    payload = {
+        "message": {
+            "inbox_id": "other_inbox",
+            "message_id": "msg_mismatch",
+            "from_": "admin@amritai.org",
+            "to": ["someone_else@example.com"],
+            "subject": "System audit",
+            "extracted_text": "Audit report",
+        }
+    }
+
+    await process_communicate_event(payload)
+
+    # Must be completely skipped: no replies and no label updates
+    mock_agentmail.inboxes.messages.reply.assert_not_called()
+    mock_agentmail.inboxes.messages.update.assert_not_called()

@@ -28,6 +28,29 @@ def extract_email_address(raw_from: str) -> str:
     return (raw_from or "").strip().lower()
 
 
+def extract_all_recipient_emails(raw_recipients: Any) -> set[str]:
+    """Extract set of clean lowercase email addresses from raw to/cc list or string."""
+    recipients: set[str] = set()
+    if not raw_recipients:
+        return recipients
+    if isinstance(raw_recipients, (str, bytes)):
+        raw_recipients = [raw_recipients]
+    elif not isinstance(raw_recipients, (list, tuple, set)):
+        raw_recipients = [raw_recipients]
+
+    for item in raw_recipients:
+        if isinstance(item, dict):
+            addr = item.get("email") or item.get("address") or ""
+        elif hasattr(item, "email"):
+            addr = getattr(item, "email", "")
+        else:
+            addr = str(item)
+        clean = extract_email_address(addr)
+        if clean:
+            recipients.add(clean)
+    return recipients
+
+
 def _get_field(obj: Any, key: str, default: Any = "") -> Any:
     """Read a field safely from a dictionary or an object."""
     if isinstance(obj, dict):
@@ -76,6 +99,23 @@ async def process_communicate_event(event_payload: dict[str, Any]) -> None:
 
     sender_email = extract_email_address(raw_from)
     logger.info("[Communicate] Inbound email from '%s' | Subject: '%s'", sender_email, subject)
+
+    # ── 0. Recipient Matching (Target Email Verification) ───────────────────
+    target_email = (config.agentmail_inbox_id or getattr(settings, "aryhant_agentmail_emailid", "")).strip().lower()
+    if target_email:
+        recipients = extract_all_recipient_emails(_get_field(message_data, "to"))
+        recipients.update(extract_all_recipient_emails(_get_field(message_data, "cc")))
+        inbox_matches = bool(inbox_id and inbox_id.strip().lower() == target_email)
+        recipient_matches = target_email in recipients or any(target_email in r for r in recipients)
+
+        if not (inbox_matches or recipient_matches):
+            logger.info(
+                "[Communicate] Inbound email not addressed to '%s' (inbox='%s', recipients=%s). Skipping.",
+                target_email,
+                inbox_id,
+                recipients,
+            )
+            return
 
     # ── 1. Sender Allowlist Gating ──────────────────────────────────────────
     if not settings.is_email_allowed(sender_email):

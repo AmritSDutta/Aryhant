@@ -38,7 +38,9 @@ sequenceDiagram
     CR-->>QS: 200 OK {"ok": true, "status": "queued"}
     Note over CR: Dispatched via FastAPI BackgroundTasks
     CR->>Comm: process_communicate_event(payload)
-    alt Unauthorized Sender
+    alt Recipient Mismatch (not addressed to ARYHANT_AGENTMAIL_EMAILID)
+        Note over Comm: Silently skipped without action
+    else Unauthorized Sender
         Comm->>AM: Add label 'unauthorized_sender', remove 'unreplied'
         Note over Comm: Silently dropped; zero LLM costs
     else Allowed Sender & Non-Admin Query
@@ -62,7 +64,7 @@ The edge worker (`proxies/cloudflare-slack-ack.js`) handles multi-path routing o
 | Path / Condition | Destination | Purpose |
 | :--- | :--- | :--- |
 | `POST /` or `/slack` | `CLOUD_RUN_WEBHOOK` (`/webhooks/slack`) | Slack URL verification & event queueing |
-| `POST /agentmail` or `/communicate` | `CLOUD_RUN_COMMUNICATE_URL` (`/api/communicate`) | AgentMail webhook instant ACK & QStash forwarding |
+| `POST /agentmail` or `/communicate` | Auto-derived from `CLOUD_RUN_WEBHOOK` (`/api/communicate`) | AgentMail webhook instant ACK & QStash forwarding |
 
 > [!NOTE]
 > The Cloudflare Worker intentionally returns HTTP 200 to AgentMail immediately (<50ms) before QStash ingestion to prevent webhook retry storms. In the rare event of an edge forwarding error, the failure is logged to Cloudflare Observability logs.
@@ -87,13 +89,16 @@ Requests arriving at `POST /api/communicate` must be signed:
 - **Shared Secret**: Validated against `ARYHANT_WEBHOOK_SHARED_SECRET` forwarded via `X-Webhook-Secret` or `X-Qstash-Forward-X-Webhook-Secret`.
 - **Fail-Closed**: If neither secret is configured on the server, all requests are rejected with `HTTP 503 Service Unavailable`. Invalid credentials return `HTTP 401 Unauthorized`.
 
-### 2. Sender Allowlist Gating
+### 2. Recipient Guardrail
+When `ARYHANT_AGENTMAIL_EMAILID` is configured, incoming emails must be addressed to that inbox address (matching `inbox_id`, `to`, or `cc`). Emails addressed to other inboxes or external recipients are silently skipped.
+
+### 3. Sender Allowlist Gating
 Before any processing or LLM calls occur, the sender's email address is evaluated against `ARYHANT_ALLOWED_EMAILS`.
 - If unauthorized: **Silently dropped**.
 - The mailbox message is tagged with the `unauthorized_sender` label and `unreplied` is removed.
 - No auto-reply is ever sent to unknown senders, preventing spam amplification and zero token consumption.
 
-### 3. Administrative Query Filter
+### 4. Administrative Query Filter
 The communicator acts strictly as an **Administrative & Operations Reporter** (Role 4):
 - Emails must contain administrative keywords (e.g. `audit`, `status`, `telemetry`, `health`, `metrics`, `prune`, `retention`, `failures`, `performance`).
 - Non-administrative emails from allowed senders are **ignored without reply** and tagged with the `ignored_non_admin` label.
@@ -110,9 +115,10 @@ Settings are managed via environment variables (or Infisical):
 | `COMMUNICATE_MODEL` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` / `gemini-flash-lite-latest` | Primary model for synthesizing audit reports. |
 | `COMMUNICATE_FALLBACK_MODEL` | `gpt-6-luna` / `gemini-3.1-flash-lite` | Failover model on rate limits or API outages. |
 | `COMMUNICATE_MAX_THREAD_DEPTH` | `10` | Maximum messages in thread before halting loop responses. |
-| `AGENTMAIL_API_KEY` | `""` | Bearer token for AgentMail SDK operations. |
-| `AGENTMAIL_INBOX_ID` | `""` | Default inbox ID for outbound replies. |
-| `AGENTMAIL_BCC_EMAIL` | `""` | Optional BCC address for monitoring outgoing reports (omitted if empty). |
+| `ARYHANT_AGENTMAIL_API_KEY` | `""` | Bearer token for AgentMail SDK operations. |
+| `ARYHANT_AGENTMAIL_EMAILID` | `""` | Target inbox email address / identifier. |
+| `ARYHANT_AGENTMAIL_BCC_EMAIL` | `""` | Optional BCC address for monitoring outgoing reports. |
+| `ARYHANT_WEBHOOK_SHARED_SECRET` | `""` | Unified shared secret forwarded by Cloudflare Worker for webhook authorization. |
 
 ### Provider-Aware Fallback Routing
 If the primary model encounters a rate limit or API failure, the failover router dynamically dispatches:

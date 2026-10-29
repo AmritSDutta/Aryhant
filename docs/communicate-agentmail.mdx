@@ -27,7 +27,6 @@ sequenceDiagram
     participant CR as Cloud Run (/api/communicate)
     participant Comm as Communicate Service (Role 4)
     participant Admin as SessionTaskService
-
     Sender->>AM: Send email
     AM->>CF: POST https://aryhant-xxx.workers.dev/agentmail
     Note over CF: Immediate HTTP 200 OK (<50ms)

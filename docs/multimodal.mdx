@@ -1,6 +1,6 @@
 ---
 title: Multimodal Handling
-description: Ingesting text, images, audio, and documents from Slack into Google GenAI with authenticated downloads, layered moderation, size budgets, and prior-turn binary pruning.
+description: Ingesting text, images, audio, and documents from Slack into Google GenAI and Nebius with parallel downloads, LiteParse PDF extraction, size budgets, and prior-turn pruning.
 ---
 
 # Multimodal Handling
@@ -18,23 +18,26 @@ flowchart TD
   subgraph Bridge["Processing Pipeline"]
     Dedup["Event Deduplication - 10-min TTL"]
     Extract["extract_slack_files - MIME Filter"]
-    Download["extract_and_download_slack_attachments - 500KB per file - 2MB total"]
+    PreFilter["Size Pre-Filter - Projected Budget Check"]
+    Download["Parallel Downloads - asyncio.gather"]
+    PDFExtract["LiteParse PDF Extractor - Markdown in 5ms"]
     Validate["validate_multimodal_payload - Moderation"]
     Build["build_adk_multimodal_content - types.Content"]
-    Pruning["In-Memory Binary Pruning - Session History"]
   end
   subgraph AgentLayer["Direct Model Engine"]
-    Runner["Direct Runner - gemini_model_runner.py"]
-    GenAI["Google GenAI / OpenAI Execution"]
+    Runner["Direct Runner - Nebius / Gemini"]
+    GenAI["Model Execution & Routing"]
   end
   Event --> Dedup
   Dedup --> Extract
-  Extract --> Download
+  Extract --> PreFilter
+  PreFilter --> Download
   Download -->|Bearer Token GET| CDN
+  Download --> PDFExtract
   Download --> Validate
+  PDFExtract --> Build
   Validate --> Build
   Build --> Runner
-  Pruning --> Runner
   Runner --> GenAI
   GenAI -->|chat_postMessage| Event
 ```
@@ -53,12 +56,12 @@ sequenceDiagram
   User->>Endpoint: Message + attachment
   Endpoint-->>User: 200 OK
   Endpoint->>Handler: Enqueue payload
-  Handler->>Slack: GET file (Bearer token)
+  Handler->>Slack: Parallel GET files (Bearer token)
   Slack-->>Handler: File bytes + MIME
   Handler->>Pipeline: Validate + size budget
   Pipeline-->>Handler: Passed
   Handler->>Engine: run_agent(attachments)
-  Engine->>Engine: Prune prior binary parts
+  Engine->>Engine: Nano/VL routing or binary pruning
   Engine-->>Handler: Text response
   Handler->>Slack: chat.postMessage in thread
 ```
@@ -72,14 +75,19 @@ Located in `src/chat_agent/utils/multimodal.py`:
 - Filters files against `SUPPORTED_MIME_PREFIXES`: `image/`, `audio/`, `application/pdf`, `text/csv`, `text/plain`, `text/markdown`, `text/html`, `application/json`.
 - Enforces `MAX_ATTACHMENTS_PER_MESSAGE = 5` valid attachments per message.
 
-### 2. Authenticated Download & Size Budgets (`download_slack_file`)
+### 2. Parallel Authenticated Download & Size Budgets (`extract_and_download_slack_attachments`)
 
-- Downloads content via `httpx.AsyncClient` with `Authorization: Bearer <ARYHANT_SLACK_BOT_TOKEN>`.
+- **Size Pre-Filtering**: Evaluates declared file metadata `size` before initiating network requests. Any attachment whose projected size would exceed `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB = 2` (2 MB total) is dropped prior to download, conserving bandwidth.
+- **Concurrent Downloads**: Downloads remaining files in parallel via `asyncio.gather(*[_download_one(sf) for sf in valid_files])` with `httpx.AsyncClient` and `Authorization: Bearer <ARYHANT_SLACK_BOT_TOKEN>`.
 - **Per-File Budget**: Enforces `MAX_SINGLE_ATTACHMENT_SIZE_KB = 500` (500 KB). Oversized files raise a `ValueError` and are skipped.
-- **Cumulative Budget**: Enforces `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB = 2` (2 MB total). Remaining files are skipped once the cumulative budget is exhausted.
 - **CDN Auth Guard**: Detects if Slack returned an HTML login page (`text/html`) instead of the requested binary file and rejects invalid downloads.
 
-### 3. Moderation Pipeline (`validate_multimodal_payload`)
+### 3. LiteParse PDF Markdown Extraction (`src/chat_agent/utils/pdf_extractor.py`)
+
+- **Fast Markdown Parsing**: Non-image PDF documents are extracted directly into clean Markdown using `LiteParse` with `ocr_enabled=False` in ~5ms.
+- **Text Routing**: Document content is formatted as `[PDF content:\n...\n]` and routed directly to the fast text model (`Nemotron Nano 30B`), avoiding heavy vision-language model overhead.
+
+### 4. Moderation Pipeline (`validate_multimodal_payload`)
 
 Content safety is enforced through configurable layers:
 
@@ -91,26 +99,18 @@ Content safety is enforced through configurable layers:
    - **Groq Prompt Guard**: Calls `meta-llama/llama-prompt-guard-2-22m` when `GROQ_API_KEY` is provided.
    - **OpenAI Omni-Moderation**: Calls `omni-moderation-latest` on images (via data URLs) and audio files (`mp3` / `wav` formats).
 
-### 4. Content Assembly (`build_adk_multimodal_content`)
+### 5. Content Assembly & History Pruning
 
-Constructs a `google.genai.types.Content` object:
-- Text prompt (truncated to `MAX_INPUT_CHARS = 5000`) is added via `types.Part.from_text(text=prompt)`.
-- Attachment binaries are appended via `types.Part.from_bytes(data=data, mime_type=mimetype)`.
-
-### 5. Prior-Turn Binary Pruning
-
-To prevent image/audio tokens from bloating context windows across multi-turn conversations, media is sanitized after processing:
-
-- **Session History Pruning** (`_prune_prior_binary_parts` in `src/chat_agent/agents/gemini_model_runner.py`):
-  - Walks the stored session history in `_HISTORY[session_id]`.
-  - Replaces all binary `inline_data` parts with `[Attachment: <mime> - processed in prior turn]`.
+- Constructs a `google.genai.types.Content` object containing text prompts (`MAX_INPUT_CHARS = 5000`) and binary parts (`types.Part.from_bytes`).
+- In Nebius mode, image turns are converted to text-form `[Image content: <extraction>]` after Phase 1 VL transcription, guaranteeing session history remains strictly text without binary bloat.
+- In Gemini mode, `_prune_prior_binary_parts` replaces prior-turn binary `inline_data` parts with `[Attachment: <mime> - processed in prior turn]`.
 
 ## Configuration & Limits
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `MULTIMODAL_ENABLED` | `true` | Enables Slack attachment downloading and processing |
-| `IS_GEMINI_MODERATION_ENOUGH` | `true` | Uses Gemini native safety settings and skips external moderation APIs |
+| `IS_GEMINI_MODERATION_ENOUGH` | `true` | Uses native model safety settings and skips external moderation APIs |
 | `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | Maximum number of attachments parsed per message |
 | `MAX_SINGLE_ATTACHMENT_SIZE_KB` | `500` | Maximum allowed file size per attachment in KB |
 | `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB` | `2` | Maximum cumulative attachment size per message in MB |

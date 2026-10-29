@@ -38,7 +38,6 @@ sequenceDiagram
     participant Tool as get_icse_syllabus()
     participant Svc as IcseSyllabusService
     participant DB as Turso / SQLite (icse_syllabus)
-
     User->>Agent: "What chapters are in Grade 5 Math?"
     Agent->>Tool: get_icse_syllabus(subject="math")
     Tool->>Svc: resolve_subject("math")

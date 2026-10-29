@@ -244,16 +244,39 @@ async def test_communicate_no_reply_protocol(mock_agentmail, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_communicate_llm_primary_failover():
+async def test_communicate_llm_primary_failover(monkeypatch):
     """Verify primary model failure triggers fallback model execution."""
     telemetry = {"failure_count": 0, "deleted_records_count": 5}
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "mock-openai-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "mock-openai-key")
 
     with patch(
         "chat_agent.communicate.llm._call_nebius_or_openai",
         AsyncMock(side_effect=[Exception("Rate limit on primary"), "Fallback report"]),
+    ), patch(
+        "chat_agent.communicate.llm._call_gemini",
+        AsyncMock(return_value="Gemini fallback report"),
     ):
         reply = await generate_communicate_reply("Audit", "Status", telemetry)
         assert reply == "Fallback report"
+
+
+@pytest.mark.asyncio
+async def test_communicate_llm_gemini_fallback_when_openai_key_missing(monkeypatch):
+    """Verify missing openai_api_key triggers failover to Gemini fallback without live network calls."""
+    telemetry = {"failure_count": 0, "deleted_records_count": 5}
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with patch(
+        "chat_agent.communicate.llm._call_nebius_or_openai",
+        AsyncMock(side_effect=Exception("Rate limit on primary")),
+    ), patch(
+        "chat_agent.communicate.llm._call_gemini",
+        AsyncMock(return_value="Gemini fallback report"),
+    ):
+        reply = await generate_communicate_reply("Audit", "Status", telemetry)
+        assert reply == "Gemini fallback report"
 
 
 def test_communicate_endpoint_with_auth(monkeypatch):

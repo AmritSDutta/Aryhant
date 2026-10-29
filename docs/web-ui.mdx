@@ -23,7 +23,6 @@ sequenceDiagram
     participant Proxy as Vite Dev Proxy
     participant Backend as FastAPI Backend (localhost:8000)
     participant Runner as run_agent (ICSE Persona)
-
     Student->>UI: Enters message / math problem
     alt Auth0 Configured
         Note over UI: Retrieves silent token from localStorage

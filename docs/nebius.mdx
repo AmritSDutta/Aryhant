@@ -1,81 +1,86 @@
 ---
-title: Nebius Token Factory & Nemotron Vision
-description: High-throughput multimodal vision inference and tool execution using NVIDIA Nemotron 3.5 Super VL on Nebius Token Factory.
+title: Nebius Token Factory & Nemotron Architecture
+description: High-throughput model execution, Nemotron Nano chat routing, Super-VL two-phase extraction, LiteParse PDF parsing, and persistent client caching.
 ---
 
-# Nebius Token Factory & Nemotron Vision
+# Nebius Token Factory & Nemotron Architecture
 
-Aryhant supports **Nebius Token Factory** as an alternative model execution runner implementing the unified `ModelRunner` interface. Inference runs against **NVIDIA Nemotron 3.5 Super VL** (`nvidia/Nemotron-3.5-Super-VL`), an open 120B parameter Mixture-of-Experts (MoE) vision-language model optimized for agentic reasoning and visual comprehension.
+Aryhant supports **Nebius Token Factory** (`api.tokenfactory.nebius.com/v1`) as its primary model execution engine implementing the unified `ModelRunner` interface. The engine couples **NVIDIA Nemotron 3 Nano 30B** for fast conversational inference with **NVIDIA Nemotron 3.5 Super VL** for multimodal extraction and LiteParse for direct PDF text extraction.
 
-## Runner Architecture
+## Nano/VL Routing & Two-Phase Extraction
 
-The `NebiusModelRunner` provides full feature parity with the primary Gemini engine, including base64 visual parsing, multi-turn tool calling, session history persistence, and failover mechanics.
+To minimize response latency while preserving multimodal fidelity, `NebiusModelRunner` routes requests based on attachment types:
 
 ```mermaid
 flowchart TD
-  subgraph Request["Request Processing"]
-    Content["Incoming Message & Attachments"] --> Runner["NebiusModelRunner.run"]
-    Runner --> Vision["Base64 Vision Encoder"]
-    Vision --> Messages["OpenAI-Compatible Message Payload"]
+  subgraph Input["Turn Ingestion"]
+    Msg["Incoming Message & Attachments"]
+    Classify{"Attachment Type?"}
+    Msg --> Classify
   end
-  subgraph Execution["Nebius Execution Loop"]
-    Messages --> API["Nebius Token Factory API - Nemotron 3.5 Super VL"]
-    API --> ToolCheck{"Tool Calls Requested?"}
-    ToolCheck -- "Yes" --> ToolExec["_execute_tool_call - Worker Thread"]
-    ToolExec --> Messages
-    ToolCheck -- "No" --> Reply["Final Synthesized Response"]
+  subgraph Routing["Model Routing"]
+    Classify -- "Text Only" --> NanoDirect["Direct Nemotron Nano 30B"]
+    Classify -- "PDF Document" --> LiteParse["LiteParse - Markdown in 5ms"]
+    Classify -- "Image Attachment" --> Phase1["Phase 1: Super VL Extraction"]
+    LiteParse --> NanoDirect
+    Phase1 -->|"[Image content: ...]"| NanoAnswer["Phase 2: Nemotron Nano 30B"]
   end
-  subgraph Fallback["Failover Tier"]
-    API -. "3 Failures / Timeout" .-> GPT["FALLBACK_GPT_MODEL - gpt-6-luna"]
-    GPT --> Reply
+  subgraph Persistence["Cache Consistency"]
+    NanoDirect --> History["Sliding Redis History - Text Only"]
+    NanoAnswer --> History
   end
 ```
 
-## Multimodal Vision Input
+### 1. Text-Only Turns (Fast Path)
+- Evaluated as a single completion directly on `NEBIUS_CHAT_MODEL` (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`) with tools enabled.
+- Bypasses Super-VL completely, avoiding heavy vision inference queuing and cutting time-to-first-token.
 
-Nebius vision models ingest images through standard OpenAI `image_url` data structures. Incoming image attachments from Slack are converted into base64 data URLs:
+### 2. PDF Document Attachments (LiteParse Fast Path)
+- PDF attachments are extracted directly into clean Markdown using `LiteParse` with `ocr_enabled=False` in ~5ms.
+- The structured document text is injected as `[PDF content: ...]` into the user prompt.
+- Handled as a text turn directly by Nemotron Nano 30B, without invoking the vision model.
 
-```json
-{
-  "type": "image_url",
-  "image_url": {
-    "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
-  }
-}
-```
+### 3. Image Attachments (Two-Phase Extraction)
+- **Phase 1 (Extraction)**: Calls `nvidia/Nemotron-3.5-Super-VL` with tools disabled, a 1200-token cap, and a strict system directive:
+  > *"Transcribe all text visible in the image exactly, then describe any diagrams, figures, or layout factually. Do not solve, answer, or explain the content."*
+- **Phase 2 (Synthesis)**: Replaces image parts with `[Image content: <extraction>]` and sends the complete conversation history + user prompt to Nemotron Nano 30B with tools enabled.
+- **Cache Consistency**: Session history records only the sanitized text turn, ensuring subsequent conversation turns never re-transmit heavy image payloads.
+- **Failover**: If Phase 1 extraction fails, execution transparently falls back to evaluating the whole turn on Super-VL.
 
-### Supported Attachment Types
-- **Homework and Worksheets**: Photos captured by students or teachers (`image/png`, `image/jpeg`, `image/webp`).
-- **Mathematical Curves and Diagrams**: High-resolution vector and raster charts.
-- **Scanned Text**: Reading passages, science diagrams, and exam papers.
+## Client Connection Caching
 
-To preserve token budgets and prevent memory growth across multi-turn conversations, prior-turn base64 data URLs are automatically converted into lightweight text placeholders (`[Attached Image - processed in prior turn]`) in session history.
+`NebiusModelRunner` maintains a module-level `_CLIENT_CACHE` mapping `(api_key, base_url)` tuples to persistent `AsyncOpenAI` client instances:
+
+- Eliminates per-turn TLS handshakes and connection setup latency.
+- Shared across both primary Nemotron calls and OpenAI fallback paths.
 
 ## Function Calling & Tool Support
 
-`NebiusModelRunner` binds six core application tools via standard OpenAI function definitions:
+`NebiusModelRunner` binds core application tools via standard OpenAI function definitions:
 
 1. **`get_current_time`**: Returns current timestamps in Indian Standard Time (IST) and UTC.
 2. **`search_web`**: Multi-provider real-time search across DuckDuckGo, Tavily, Exa, Firecrawl, and Serper.
 3. **`generate_study_notes_pdf`**: Compiles handwritten notebook-style ReportLab PDFs and auto-uploads them to Slack.
 4. **`generate_infographic_pdf`**: Compiles visual lesson infographic posters and auto-uploads them to Slack.
 5. **`generate_practice_questions`**: Generates ICSE Grade 5 practice questions and hints for a topic.
-6. **`calculate_math`**: Safely evaluates a math expression via AST parsing (no `eval`).
+6. **`calculate_math`**: Safely evaluates mathematical expressions via AST parsing without `eval`.
 
-When Nemotron requests tool execution, the runner executes the function on a worker thread (`asyncio.to_thread`), formats the result as a `role: "tool"` message, and resubmits the context (up to 5 rounds) until generation completes.
+Tool execution runs on a worker thread (`asyncio.to_thread`), appending `role: "tool"` messages back to the conversation until generation completes (up to 5 rounds).
 
 ## Configuration & Activation
 
-To switch the active model runner to Nebius, update your environment variables:
+To configure Nebius Token Factory, update your environment settings:
 
 ```bash
 # Model Provider Switch
 MODEL_PROVIDER=nebius
 
-# Nebius Token Factory Credentials
+# Nebius Token Factory Credentials & Models
 NEBIUS_API_KEY=your_nebius_api_key_here
 NEBIUS_BASE_URL=https://api.tokenfactory.nebius.com/v1
+NEBIUS_CHAT_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
 NEBIUS_MODEL=nvidia/Nemotron-3.5-Super-VL
+NEBIUS_ADMIN_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
 ```
 
 ### Configuration Parameters
@@ -85,8 +90,9 @@ NEBIUS_MODEL=nvidia/Nemotron-3.5-Super-VL
 | `MODEL_PROVIDER` | `"nebius"` | Active engine selector: `"gemini"` or `"nebius"`. |
 | `NEBIUS_API_KEY` | `""` | Nebius Token Factory API key. |
 | `NEBIUS_BASE_URL` | `"https://api.tokenfactory.nebius.com/v1"` | Nebius OpenAI-compatible endpoint base URL. |
-| `NEBIUS_MODEL` | `"nvidia/Nemotron-3.5-Super-VL"` | Target vision-language model identifier. |
-| `NEBIUS_ADMIN_MODEL` | `"nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"` | Lightweight agent model identifier used by Role 4 AdminAgent for telemetry auditing and failure diagnostics. |
+| `NEBIUS_CHAT_MODEL` | `"nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"` | Fast primary chat and reasoning model for text and synthesized turns. |
+| `NEBIUS_MODEL` | `"nvidia/Nemotron-3.5-Super-VL"` | 120B MoE Vision-Language model for Phase 1 image extraction and visual fallback. |
+| `NEBIUS_ADMIN_MODEL` | `"nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"` | Lightweight model used by Role 4 AdminAgent for telemetry auditing and failure diagnostics. |
 | `MAX_OUTPUT_TOKENS` | `8000` | Maximum output generation token budget. |
 
 ## Resilience & Retry Strategy

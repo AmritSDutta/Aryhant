@@ -8,7 +8,9 @@ An always-on personal AI companion powered by **Nebius Token Factory** running *
 
 All primary inference runs on [Nebius Token Factory](https://nebius.com) (`api.tokenfactory.nebius.com/v1`) against NVIDIA open source Nemotron models:
 
-- **Chat, vision & tool loops** — `nvidia/Nemotron-3.5-Super-VL` (default `NEBIUS_MODEL`): the always-on companion brain, multimodal attachment understanding, and multi-turn tool calling.
+- **Chat & tool loops** — `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (`NEBIUS_CHAT_MODEL`): fast primary companion brain for conversational turns, syllabus tutoring, and tool calling.
+- **Multimodal vision extraction** — `nvidia/Nemotron-3.5-Super-VL` (`NEBIUS_MODEL`): two-phase visual transcription and diagram description for image turns, keeping session history pure text.
+- **Document extraction** — `liteparse`: high-speed direct PDF Markdown extraction without OCR, routing document-only turns directly to Nemotron Nano in ~5ms.
 - **Question generation** — `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (primary) with `nvidia/nemotron-3-super-120b-a12b` failover, generating 15–20 ICSE practice questions and hints.
 - **Research verification & admin diagnostics** — Token Factory sandboxes verify research code snippets, and the autonomous admin auditor runs its multi-turn diagnostic loop on Nemotron.
 
@@ -25,7 +27,7 @@ See [docs/nebius.mdx](docs/nebius.mdx) for the full architecture. Gemini (Google
 | Resilient Deep Research & Deliberation (Role 3) | Autonomous research pipeline delivering ~2,500-word whitepaper PDFs (`/research`) and ~1,500-word Decision Guide PDFs with comparative matrices (`/deliberate`), 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
 | Direct Multi-Model Engine | Direct Google GenAI SDK (`google.genai.Client`) with 3 random attempts across `FIRST_CHOICE_MODELS` and automatic failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` / `httpx` |
 | Procedural Diagrams | Dynamic math and science diagram generator (parabolas, waves, geometric figures, circuits, biological structures) |
-| Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with size budgets and prior-turn binary attachment pruning |
+| Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with parallel downloads, projected size pre-filtering, LiteParse PDF markdown extraction, and prior-turn binary attachment pruning |
 | Multi-Provider Web Search | Weighted random search pool across DuckDuckGo, Exa, Firecrawl, Tavily, and Serper with GPT summarization for large contexts |
 | Slack Locally | Native Slack Bolt Socket Mode with `AsyncSocketModeHandler` and `ARYHANT_ALLOWED_EMAILS` deterministic authorization |
 | Slack Over HTTP | Event filtering, threaded replies, and scale-to-zero proxying via Cloudflare Worker and Upstash QStash |

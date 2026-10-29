@@ -154,6 +154,32 @@ body {
   background-color: var(--warning);
 }
 
+/* Server Warm Up Button */
+.warmup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--primary);
+  transition: all 0.15s ease;
+}
+
+.warmup-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.warmup-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
 /* Auth Buttons */
 .auth-btn {
   display: inline-flex;

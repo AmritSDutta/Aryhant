@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn, LogOut, Flame, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { StatusPill } from './StatusPill';
+import { fetchHealth } from '../lib/api';
 import { appConfig } from '../lib/config';
 
 const UserAvatar: React.FC<{ user: { picture?: string; name?: string; email?: string } }> = ({ user }) => {
@@ -27,6 +28,28 @@ const UserAvatar: React.FC<{ user: { picture?: string; name?: string; email?: st
 export const Header: React.FC = () => {
   const auth0 = appConfig.isAuthEnabled ? useAuth0() : null;
   const [authTimeout, setAuthTimeout] = React.useState(false);
+  const [isWarming, setIsWarming] = useState(false);
+  const [warmStatus, setWarmStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleWarmUpServer = async () => {
+    if (isWarming) return;
+    setIsWarming(true);
+    setWarmStatus('idle');
+    try {
+      const res = await fetchHealth();
+      if (res && res.ok) {
+        setWarmStatus('success');
+      } else {
+        setWarmStatus('error');
+      }
+    } catch (err) {
+      console.warn('Failed to warm up backend server:', err);
+      setWarmStatus('error');
+    } finally {
+      setIsWarming(false);
+      setTimeout(() => setWarmStatus('idle'), 3500);
+    }
+  };
 
   React.useEffect(() => {
     if (appConfig.isAuthEnabled && auth0?.isLoading) {
@@ -57,6 +80,36 @@ export const Header: React.FC = () => {
 
       <div className="header-actions">
         <StatusPill />
+
+        <button
+          type="button"
+          className="warmup-btn"
+          onClick={handleWarmUpServer}
+          disabled={isWarming}
+          title="Ping /api/health to warm up cold Cloud Run instance"
+        >
+          {isWarming ? (
+            <>
+              <Loader2 size={13} className="spin" />
+              <span>Warming Up...</span>
+            </>
+          ) : warmStatus === 'success' ? (
+            <>
+              <CheckCircle2 size={13} color="#2e7d32" />
+              <span>Server Ready</span>
+            </>
+          ) : warmStatus === 'error' ? (
+            <>
+              <AlertCircle size={13} color="#c62828" />
+              <span>Retry Warmup</span>
+            </>
+          ) : (
+            <>
+              <Flame size={13} />
+              <span>Warm Up Server</span>
+            </>
+          )}
+        </button>
 
         {appConfig.isAuthEnabled && auth0 && (
           <>

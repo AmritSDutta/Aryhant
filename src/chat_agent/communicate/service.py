@@ -66,7 +66,16 @@ def render_email_html(reply_markdown: str) -> str:
 <head>
 <meta charset="utf-8">
 <style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #1f2937; margin: 0; padding: 20px; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    color: #3b2e25;
+    margin: 0;
+    padding: 24px;
+    background-color: #f7efe1;
+    background: linear-gradient(135deg, #fdfbf7 0%, #f6eee3 50%, #eee1cf 100%);
+    min-height: 100vh;
+  }}
   table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
   th, td {{ border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }}
   th {{ background-color: #f3f4f6; font-weight: 600; }}

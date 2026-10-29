@@ -502,7 +502,8 @@ def _convert_markdown_to_flowables(
         import markdown
         html_text = markdown.markdown(processed_md, extensions=["tables", "fenced_code"])
         root = ET.fromstring(f"<root>{html_text}</root>")
-    except Exception:
+    except Exception as exc:
+        logger.error("Study notes markdown conversion to flowables failed: %s", exc, exc_info=True)
         # Fallback to structured plain paragraphs if markdown or XML parsing fails
         plain_flowables = []
         for line in normalized_content.split("\n"):

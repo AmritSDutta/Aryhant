@@ -206,8 +206,8 @@ def clean_llm_markdown_for_pdf(raw_text: str) -> str:
         from chat_agent.utils.math_formatter import clean_math_text
 
         text = clean_math_text(text)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Math cleaning failed in clean_llm_markdown_for_pdf: %s", exc, exc_info=True)
 
     return text
 
@@ -472,7 +472,7 @@ def build_research_pdf(
                     flowables.append(tbl)
                     flowables.append(Spacer(1, 6))
     except Exception as parse_err:
-        logger.warning("Markdown XML parsing notice (%s); using fallback paragraph parser.", parse_err)
+        logger.error("Markdown XML parsing failed for ReportLab flowables: %s. Using fallback paragraph parser.", parse_err, exc_info=True)
         for line in markdown_content.splitlines():
             s = line.strip()
             if not s:

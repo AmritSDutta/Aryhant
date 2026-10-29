@@ -144,3 +144,73 @@ export function humanizeSymbols(text: string): string {
 
   return result;
 }
+
+const UNICODE_TO_PDF_ASCII: Record<string, string> = {
+  '→': '->',
+  '←': '<-',
+  '↔': '<->',
+  '⇒': '=>',
+  '⇐': '<=',
+  '⇔': '<=>',
+  '↑': '^',
+  '↓': 'v',
+  '↕': '^v',
+  '↦': '|->',
+  '≤': '<=',
+  '≥': '>=',
+  '≠': '!=',
+  '≈': '~=',
+  '≡': '==',
+  '∼': '~',
+  '≃': '~=',
+  '≪': '<<',
+  '≫': '>>',
+  '±': '+/-',
+  '∓': '-/+',
+  '×': 'x',
+  '÷': '/',
+  '·': '*',
+  '•': '*',
+  '…': '...',
+  '∘': 'o',
+  '∈': 'in',
+  '∉': 'not in',
+  '⊂': 'subset of',
+  '⊆': 'subseteq of',
+  '⊃': 'superset of',
+  '⊇': 'supseteq of',
+  '∩': 'intersect',
+  '∪': 'union',
+  '∀': 'for all',
+  '∃': 'exists',
+  '¬': 'not',
+  '∧': 'AND',
+  '∨': 'OR',
+  '∞': 'infinity',
+  '∂': 'd',
+  'α': 'alpha',
+  'β': 'beta',
+  'γ': 'gamma',
+  'δ': 'delta',
+  'ε': 'epsilon',
+  'θ': 'theta',
+  'λ': 'lambda',
+  'μ': 'mu',
+  'π': 'pi',
+  'σ': 'sigma',
+  'ω': 'omega',
+  'Δ': 'Delta',
+  'Σ': 'Sigma',
+  'Ω': 'Omega',
+};
+
+export function humanizeSymbolsForPdf(text: string): string {
+  if (!text) return '';
+  let result = humanizeSymbols(text);
+  for (const [unicodeChar, asciiEquiv] of Object.entries(UNICODE_TO_PDF_ASCII)) {
+    if (result.includes(unicodeChar)) {
+      result = result.split(unicodeChar).join(asciiEquiv);
+    }
+  }
+  return result;
+}

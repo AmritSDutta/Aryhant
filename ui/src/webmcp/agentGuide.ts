@@ -19,6 +19,7 @@ This guide explains how to use the browser-side tools correctly. Read it before 
 | \`get_reference_url\` | \`{}\` | Read-only: returns comma-separated stored reference and documentation URLs. |
 | \`get_current_time\` | \`{}\` | Read-only: returns user's current local date, weekday, time, timezone, and ISO timestamp. |
 | \`calculate\` | \`{ expression }\` | Decimal and scientific math evaluation (e.g. "12.5 * 4.2 + 3.1", "sqrt(144)"). |
+| \`export_pdf\` | \`{}\` | Generates and downloads a publication-quality session PDF report. |
 
 ## Document Retrieval
 - \`search_document\` queries the user's uploaded document chunks stored in browser IndexedDB.

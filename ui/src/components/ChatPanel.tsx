@@ -4,6 +4,8 @@ import { AlertCircle } from 'lucide-react';
 import { Message } from '../lib/types';
 import { sendChatMessage, ApiError } from '../lib/api';
 import { appConfig } from '../lib/config';
+import { globalIDBStorage } from '../lib/idbStorage';
+import { exportSessionPdf, ExportPdfResult } from '../lib/pdfExportService';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
@@ -21,13 +23,15 @@ function getOrCreateSessionId(): string {
 export interface ChatBridge {
   getMessages: () => Array<{ sender: 'user' | 'assistant' | 'agent'; text: string; timestamp?: string | number }>;
   postMessage: (text: string) => void;
+  exportPdf?: () => ExportPdfResult;
 }
 
 interface ChatPanelProps {
+  activeDocName?: string;
   onRegisterChatBridge?: (bridge: ChatBridge) => void;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) => {
+export const ChatPanel: React.FC<ChatPanelProps> = ({ activeDocName, onRegisterChatBridge }) => {
   const [sessionId, setSessionId] = useState<string>(getOrCreateSessionId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -35,6 +39,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) =>
 
   const messagesRef = React.useRef<Message[]>(messages);
   messagesRef.current = messages;
+
+  const sessionIdRef = React.useRef<string>(sessionId);
+  sessionIdRef.current = sessionId;
+
+  const handleExportPdf = React.useCallback((): ExportPdfResult => {
+    return exportSessionPdf({
+      sessionId: sessionIdRef.current,
+      messages: messagesRef.current,
+      docName: activeDocName,
+    });
+  }, [activeDocName]);
 
   useEffect(() => {
     if (onRegisterChatBridge) {
@@ -49,23 +64,77 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) =>
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           setMessages((prev) => [...prev, assistantMessage]);
+
+          globalIDBStorage.saveSessionTurn({
+            id: 'turn-' + Date.now(),
+            sessionId: sessionIdRef.current,
+            turnNumber: Math.floor(messagesRef.current.length / 2) + 1,
+            agentMessage: text,
+            timestamp: Date.now(),
+          }).catch((err) => console.warn('Could not save agent turn to IDB:', err));
         },
+        exportPdf: handleExportPdf,
       });
     }
-  }, [onRegisterChatBridge]);
+  }, [onRegisterChatBridge, handleExportPdf]);
 
   const auth0 = appConfig.isAuthEnabled ? useAuth0() : null;
 
+  // Restore active session turns on mount from IDB
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY, sessionId);
-  }, [sessionId]);
+    (async () => {
+      try {
+        let activeSid = await globalIDBStorage.getActiveSessionId();
+        if (!activeSid) {
+          activeSid = sessionIdRef.current;
+          await globalIDBStorage.setActiveSessionId(activeSid);
+        } else {
+          setSessionId(activeSid);
+          sessionStorage.setItem(SESSION_KEY, activeSid);
+        }
 
-  const handleNewSession = () => {
+        const storedTurns = await globalIDBStorage.getActiveSessionTurns(activeSid);
+        if (storedTurns && storedTurns.length > 0) {
+          const restored: Message[] = [];
+          for (const t of storedTurns) {
+            if (t.userPrompt) {
+              restored.push({
+                id: `usr-${t.id}`,
+                sender: 'user',
+                text: t.userPrompt,
+                timestamp: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+            if (t.agentMessage) {
+              restored.push({
+                id: `ast-${t.id}`,
+                sender: 'assistant',
+                text: t.agentMessage,
+                timestamp: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+          }
+          if (restored.length > 0) {
+            setMessages(restored);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not restore session from IDB:', err);
+      }
+    })();
+  }, []);
+
+  const handleNewSession = async () => {
     const newId = 'web-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
     sessionStorage.setItem(SESSION_KEY, newId);
     setSessionId(newId);
     setMessages([]);
     setAlertError(null);
+    try {
+      await globalIDBStorage.setActiveSessionId(newId);
+    } catch (err) {
+      console.warn('Could not update active session ID in IDB:', err);
+    }
   };
 
   const handleSendMessage = async (text: string) => {
@@ -111,6 +180,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) =>
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Persist completed turn to IndexedDB
+      globalIDBStorage.saveSessionTurn({
+        id: 'turn-' + Date.now(),
+        sessionId,
+        turnNumber: Math.floor(messagesRef.current.length / 2) + 1,
+        userPrompt: text,
+        agentMessage: response.reply,
+        timestamp: Date.now(),
+      }).catch((err) => console.warn('Could not save turn to IDB:', err));
     } catch (err: unknown) {
       const errorText = err instanceof ApiError ? err.detail : 'Failed to communicate with Aryhant assistant.';
       setAlertError(errorText);
@@ -153,6 +232,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) =>
       <MessageInput
         onSendMessage={handleSendMessage}
         onNewSession={handleNewSession}
+        onExportPdf={handleExportPdf}
         disabled={loading}
       />
     </div>

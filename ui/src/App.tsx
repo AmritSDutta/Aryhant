@@ -63,6 +63,9 @@ export const App: React.FC = () => {
       getReferenceUrls: () => {
         return referenceUrlsRef.current;
       },
+      exportPdf: () => {
+        return chatBridgeRef.current?.exportPdf?.();
+      },
     };
   }, []);
 
@@ -124,12 +127,15 @@ export const App: React.FC = () => {
           />
           <div className="webmcp-indicator">
             <span className="webmcp-dot"></span>
-            <span>WebMCP: 9 Tools Active</span>
+            <span>WebMCP: 10 Tools Active</span>
           </div>
         </aside>
 
         <main className="chat-main-area">
-          <ChatPanel onRegisterChatBridge={handleRegisterChatBridge} />
+          <ChatPanel
+            activeDocName={doc.activeDoc?.name}
+            onRegisterChatBridge={handleRegisterChatBridge}
+          />
         </main>
       </div>
     </div>

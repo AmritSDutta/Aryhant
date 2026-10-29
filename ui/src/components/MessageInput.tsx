@@ -1,15 +1,17 @@
 import React, { useState, KeyboardEvent } from 'react';
-import { Send, RotateCcw } from 'lucide-react';
+import { Send, RotateCcw, Download } from 'lucide-react';
 
 interface MessageInputProps {
   onSendMessage: (text: string) => void;
   onNewSession: () => void;
+  onExportPdf?: () => void;
   disabled?: boolean;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
   onSendMessage,
   onNewSession,
+  onExportPdf,
   disabled = false,
 }) => {
   const [text, setText] = useState('');
@@ -51,10 +53,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       </div>
 
       <div className="input-footer">
-        <button className="new-chat-btn" onClick={onNewSession} type="button">
-          <RotateCcw size={12} />
-          <span>New Session</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button className="new-chat-btn" onClick={onNewSession} type="button">
+            <RotateCcw size={12} />
+            <span>New Session</span>
+          </button>
+          {onExportPdf && (
+            <button className="new-chat-btn" onClick={onExportPdf} type="button" title="Export session as PDF">
+              <Download size={12} />
+              <span>Export PDF</span>
+            </button>
+          )}
+        </div>
         <span>Enter to send, Shift+Enter for new line</span>
       </div>
     </div>

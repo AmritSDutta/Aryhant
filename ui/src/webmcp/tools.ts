@@ -17,6 +17,7 @@ export interface ToolContext {
   searchWeb?: (query: string) => Promise<SearchToolOutcome<{ title: string; snippet: string; url: string }>>;
   calculate?: (expression: string) => number;
   getReferenceUrls?: () => string[];
+  exportPdf?: () => { success: boolean; error?: string } | void;
 }
 
 export const TOOL_DEFINITIONS: WebMCPTool[] = [
@@ -124,6 +125,14 @@ export const TOOL_DEFINITIONS: WebMCPTool[] = [
       required: ['expression'],
     },
   },
+  {
+    name: 'export_pdf',
+    description: 'Generates and downloads a publication-quality session PDF report containing the dialogue transcript and notes.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 export async function executeToolCall(
@@ -207,6 +216,17 @@ export async function executeToolCall(
       }
       const result = context.calculate(expression);
       return { expression, result };
+    }
+
+    case 'export_pdf': {
+      if (context.exportPdf) {
+        const res = context.exportPdf();
+        if (res && !res.success) {
+          throw new Error(res.error || 'Cannot export an empty session.');
+        }
+        return { success: true, message: 'PDF report generated and download initiated.' };
+      }
+      throw new Error('PDF export capability not available');
     }
 
     default:

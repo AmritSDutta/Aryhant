@@ -103,4 +103,4 @@ Connect your repository in the Cloudflare Pages dashboard:
 - **Root Directory**: `ui`
 - **Build Command**: `npm run build`
 - **Build Output Directory**: `dist`
-- **Environment Variables**: Add `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`, and `VITE_API_BASE_URL` (pointing to your deployed FastAPI backend URL, e.g. `https://experiments.amritai.org`).
+- **Environment Variables**: Add `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`, and `VITE_API_BASE_URL` (pointing to your deployed FastAPI backend URL, e.g. `https://aryhant-xxxx-uc.a.run.app`).

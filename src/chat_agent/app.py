@@ -90,7 +90,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://aryhant.pages.dev",
+        "https://aryhant.amrit.fyi",
     ],
     allow_origin_regex=r"^https://([a-zA-Z0-9_-]+\.)?aryhant\.pages\.dev$|^https://aryhant-[a-zA-Z0-9_-]+\.us-central1\.run\.app$",
     allow_credentials=True,

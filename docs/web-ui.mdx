@@ -1,11 +1,11 @@
 ---
 title: Web UI
-description: React and Vite single-page companion application for Aryhant deployed on Cloudflare Pages with Auth0 PKCE authentication and real-time ICSE chat.
+description: React and Vite single-page application for Aryhant deployed on Cloudflare Pages with Auth0 PKCE authentication and Family AI Assistant chat.
 ---
 
 # Web UI
 
-The `/ui` directory houses a modern React 18 + TypeScript single-page application (SPA) providing a direct web interface for Aryhant. It serves as an interactive companion for St. Xavier's Grade 5 ICSE syllabus guidance, practice questions, and math problem-solving.
+The `/ui` directory houses a modern React 18 + TypeScript single-page application (SPA) providing a direct web interface for Aryhant. It serves as an interactive Family AI Assistant for learning guidance, practice questions, research workflows, and family productivity.
 
 The web app is optimized for static deployment to **Cloudflare Pages** and includes a zero-config development proxy for local backend connectivity.
 
@@ -18,11 +18,11 @@ The frontend connects to the FastAPI backend at `/api/chat` and `/api/health`. D
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Student as Student / User
+    actor Student as Family Member / User
     participant UI as React UI (localhost:5173)
     participant Proxy as Vite Dev Proxy
     participant Backend as FastAPI Backend (localhost:8000)
-    participant Runner as run_agent (ICSE Persona)
+    participant Runner as run_agent (Family Assistant Persona)
     Student->>UI: Enters message / math problem
     alt Auth0 Configured
         Note over UI: Retrieves silent token from localStorage
@@ -40,8 +40,8 @@ sequenceDiagram
 
 ## Key Features
 
-### 1. ICSE Grade 5 Companion
-- **Structured Explanations**: Answers formatted specifically for Grade 5 level comprehension.
+### 1. Family AI Assistant
+- **Structured Explanations**: Answers formatted specifically for clear comprehension across educational and family tasks.
 - **ASCII & Plain-Text Math**: Renders math using clean fractions (`3/5`), superscripts (`cm²`), and arithmetic operators without raw LaTeX clutter.
 - **Session Continuity**: Retains conversation history across page reloads by generating a unique session key persisted in `sessionStorage`.
 
@@ -55,7 +55,13 @@ sequenceDiagram
 - Uses `useRefreshTokens={true}` and `cacheLocation="localstorage"` to eliminate third-party cookie restrictions in modern browsers on `localhost`.
 - When Auth0 environment variables are omitted, the application runs automatically in open / demo mode.
 
-### 4. Rate Limit & Safety Alerts
+### 4. WebMCP Agent Bridge & In-Browser Retrieval
+- **3-Tier WebMCP Standard**: Publishes tools to Chrome `document.modelContext`, declarative DOM forms, and JSON-RPC `postMessage` listeners.
+- **Client-Side Document Parsing**: Ingests files under 2MB (`.pdf`, `.docx`, `.doc`, `.txt`, `.md`) via `@llamaindex/liteparse-wasm` and builds an in-memory BM25 index persisted in browser IndexedDB (`AryhantDB`).
+- **Reference URLs Manager**: Stores up to 10 verified syllabus/reference URLs accessible to visiting agents via `get_reference_url`.
+- See the dedicated [WebMCP Browser Integration](/webmcp) guide for tool signatures and discovery protocols.
+
+### 5. Rate Limit & Safety Alerts
 - Aligned with the backend's **20 requests/minute** limit (`Rate(20, Duration.MINUTE)`).
 - When the rate limit is reached, an alert banner displays a countdown message rather than failing silently.
 
@@ -68,22 +74,41 @@ sequenceDiagram
     <Tree.Folder name="public" defaultOpen>
       <Tree.File name="Aryhant.jpg" />
       <Tree.File name="icon.ico" />
+      <Tree.File name="liteparse_wasm_bg.wasm" highlight />
     </Tree.Folder>
     <Tree.Folder name="src" defaultOpen>
       <Tree.Folder name="components" defaultOpen>
         <Tree.File name="ChatPanel.tsx" highlight />
+        <Tree.File name="FileUpload.tsx" highlight />
         <Tree.File name="Header.tsx" />
         <Tree.File name="MessageInput.tsx" />
         <Tree.File name="MessageItem.tsx" />
         <Tree.File name="MessageList.tsx" />
+        <Tree.File name="ReferenceUrls.tsx" highlight />
         <Tree.File name="StatusPill.tsx" />
       </Tree.Folder>
-      <Tree.Folder name="lib">
-        <Tree.File name="api.ts" highlight />
+      <Tree.Folder name="hooks" defaultOpen>
+        <Tree.File name="useDocumentController.ts" highlight />
+      </Tree.Folder>
+      <Tree.Folder name="lib" defaultOpen>
+        <Tree.File name="api.ts" />
+        <Tree.File name="bm25.ts" highlight />
         <Tree.File name="config.ts" />
+        <Tree.File name="ddgSearch.ts" highlight />
+        <Tree.File name="idbStorage.ts" highlight />
+        <Tree.File name="liteparseService.ts" highlight />
+        <Tree.File name="mathEvaluator.ts" highlight />
+        <Tree.File name="searchService.ts" highlight />
+        <Tree.File name="tavilySearch.ts" highlight />
         <Tree.File name="types.ts" />
       </Tree.Folder>
-      <Tree.File name="App.tsx" />
+      <Tree.Folder name="webmcp" defaultOpen>
+        <Tree.File name="agentGuide.ts" highlight />
+        <Tree.File name="provider.ts" highlight />
+        <Tree.File name="tools.ts" highlight />
+        <Tree.File name="types.ts" />
+      </Tree.Folder>
+      <Tree.File name="App.tsx" highlight />
       <Tree.File name="index.css" />
       <Tree.File name="main.tsx" />
       <Tree.File name="vite-env.d.ts" />

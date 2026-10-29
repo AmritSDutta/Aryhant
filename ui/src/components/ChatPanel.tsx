@@ -18,11 +18,41 @@ function getOrCreateSessionId(): string {
   return sId;
 }
 
-export const ChatPanel: React.FC = () => {
+export interface ChatBridge {
+  getMessages: () => Array<{ sender: 'user' | 'assistant' | 'agent'; text: string; timestamp?: string | number }>;
+  postMessage: (text: string) => void;
+}
+
+interface ChatPanelProps {
+  onRegisterChatBridge?: (bridge: ChatBridge) => void;
+}
+
+export const ChatPanel: React.FC<ChatPanelProps> = ({ onRegisterChatBridge }) => {
   const [sessionId, setSessionId] = useState<string>(getOrCreateSessionId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [alertError, setAlertError] = useState<string | null>(null);
+
+  const messagesRef = React.useRef<Message[]>(messages);
+  messagesRef.current = messages;
+
+  useEffect(() => {
+    if (onRegisterChatBridge) {
+      onRegisterChatBridge({
+        getMessages: () => messagesRef.current,
+        postMessage: (text: string) => {
+          const assistantMessage: Message = {
+            id: 'msg-' + Date.now(),
+            sender: 'assistant',
+            text,
+            model: 'WebMCP Agent',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+        },
+      });
+    }
+  }, [onRegisterChatBridge]);
 
   const auth0 = appConfig.isAuthEnabled ? useAuth0() : null;
 

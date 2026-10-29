@@ -13,7 +13,7 @@
       { "group": "Setup", "pages": ["prerequisites"] },
       { "group": "Channels", "pages": ["slack", "email", "multimodal"] },
       { "group": "AgentMail Communication", "pages": ["communicate-agentmail"] },
-      { "group": "Web Interface", "pages": ["web-ui"] },
+      { "group": "Web Interface", "pages": ["web-ui", "webmcp"] },
       { "group": "API & Auth", "pages": ["api-reference"] },
       { "group": "Capabilities & Tools", "pages": ["icse-syllabus", "web-search", "study-notes", "question-generation", "math-tool", "nebius", "text-formatter", "observability"] },
       { "group": "Memory & State", "pages": ["redis-session-history", "turso-memory-preferences"] },

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Message } from '../lib/types';
+import { HumanizedMessage } from './HumanizedMessage';
 
 interface MessageItemProps {
   message: Message;
@@ -11,7 +12,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   return (
     <div className={`message-row ${message.sender}`}>
       <div className="message-bubble">
-        <div>{message.text}</div>
+        <HumanizedMessage content={message.text} />
         <div className="message-meta">
           <span>{message.timestamp}</span>
           {!isUser && message.model && (

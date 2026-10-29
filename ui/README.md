@@ -1,6 +1,6 @@
 # Aryhant Web UI
 
-A modern, responsive React + TypeScript companion web interface for Aryhant (ICSE Grade 5 Pedagogical Companion), deployable as a static SPA to Cloudflare Pages.
+A modern, responsive React + TypeScript web interface for Aryhant (Family AI Assistant), deployable as a static SPA to Cloudflare Pages.
 
 ---
 

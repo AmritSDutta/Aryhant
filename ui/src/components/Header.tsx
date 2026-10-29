@@ -31,7 +31,7 @@ export const Header: React.FC = () => {
         />
         <div>
           <h1 className="brand-title">Aryhant</h1>
-          <p className="brand-subtitle">ICSE Grade 5 Pedagogical Companion</p>
+          <p className="brand-subtitle">Family AI Assistant</p>
         </div>
       </div>
 

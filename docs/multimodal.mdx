@@ -53,12 +53,12 @@ sequenceDiagram
   participant Handler as Background Handler
   participant Pipeline as Validation Pipeline
   participant Engine as Direct Runner
-  User->>Endpoint: Message + attachment
+  User->>Endpoint: Message with attachment
   Endpoint-->>User: 200 OK
   Endpoint->>Handler: Enqueue payload
   Handler->>Slack: Parallel GET files (Bearer token)
-  Slack-->>Handler: File bytes + MIME
-  Handler->>Pipeline: Validate + size budget
+  Slack-->>Handler: File bytes and MIME
+  Handler->>Pipeline: Validate and check budget
   Pipeline-->>Handler: Passed
   Handler->>Engine: run_agent(attachments)
   Engine->>Engine: Nano/VL routing or binary pruning

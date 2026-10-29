@@ -53,36 +53,34 @@ sequenceDiagram
     participant QStash as Upstash QStash
     participant Run as Cloud Run (chat_agent.app:app, scale-to-zero)
     participant TF as Nebius Token Factory (Nemotron)
-    participant State as Redis sessions + Turso memory & syllabus
+    participant State as Redis sessions and Turso memory
     participant SlackAPI as Slack Web API
-
     rect rgb(245, 248, 250)
-    note over Student,State: Slack path — chat, tutoring, notes & research
+    note over Student,State: Slack path - chat, tutoring, notes and research
     Student->>Slack: @Aryhant "Generate study notes on Fractions"
     Slack->>CF: POST / (expects 200 within 3s)
     CF-->>Slack: HTTP 200 OK (instant ACK <50ms)
     CF->>QStash: Enqueue event
     QStash->>Run: POST /webhooks/slack (retries through cold start)
-    Run->>Run: verify QStash signature + shared secret
+    Run->>Run: verify QStash signature and shared secret
     Run-->>QStash: HTTP 200 {"ok": true}
     Run->>State: load 20-turn session, memory, syllabus
-    Run->>TF: run_agent() — chat / vision / tool calls (Nemotron-3.5-Super-VL)
-    TF-->>Run: reply (+ get_icse_syllabus, search_web tool results)
+    Run->>TF: run_agent() - chat, vision, tool calls
+    TF-->>Run: reply with get_icse_syllabus and search_web tool results
     Run->>SlackAPI: chat.postMessage(text_reply, thread_ts)
     Run->>TF: generate_study_notes_pdf [background thread]
     TF-->>Run: compiled PDF (ReportLab)
     Run->>SlackAPI: upload_file_to_slack() -> files.uploadExternal
     SlackAPI-->>Student: reply in thread, then PDF study notes
     end
-
     rect rgb(245, 250, 245)
-    note over Parent,State: Email path — AgentMail ops reports
+    note over Parent,State: Email path - AgentMail ops reports
     Parent->>AM: "Email me a usage audit"
     AM->>CF: POST /agentmail webhook (message.received)
     CF-->>AM: HTTP 200 OK (instant ACK <50ms)
     CF->>QStash: Enqueue event
     QStash->>Run: POST /api/communicate
-    Run->>Run: verify signature; sender allowlist + admin-keyword gate
+    Run->>Run: verify signature, sender allowlist and admin-keyword gate
     Run->>State: aget_table_metrics(7), adelete_records_older_than(15)
     Run->>TF: synthesize ops report (Nemotron-3-Nano-30B)
     TF-->>Run: report text

@@ -29,13 +29,14 @@ class JEVValidationResult(BaseModel):
 def _heuristic_quality_eval(
     sample_text: str,
     mode: ResearchMode,
-    threshold: float = 0.75,
+    threshold: float | None = None,
 ) -> JEVValidationResult:
     """Evaluate report quality based on word count and structural completeness."""
+    eff_threshold = threshold if threshold is not None else getattr(settings, "JEV_COMPOSITE_SCORE_THRESHOLD", 0.60)
     target_words = 2500 if mode == ResearchMode.TECHNICAL else 1500
     words = len(sample_text.split())
     ratio = min(1.0, words / max(1, target_words * 0.7))
-    passed = ratio >= threshold
+    passed = ratio >= eff_threshold
     return JEVValidationResult(
         passed=passed,
         composite_score=round(ratio, 4),
@@ -55,8 +56,9 @@ async def evaluate_report_quality(
     criteria: list[str] | str,
     report_text: str,
     mode: ResearchMode = ResearchMode.TECHNICAL,
-    threshold: float = 0.75,
+    threshold: float | None = None,
 ) -> JEVValidationResult:
+    eff_threshold = threshold if threshold is not None else getattr(settings, "JEV_COMPOSITE_SCORE_THRESHOLD", 0.60)
     """Evaluate synthesized report against user criteria using JEV Noul probabilities."""
     clean_topic = topic.strip()
     criteria_str = "; ".join(criteria) if isinstance(criteria, list) else str(criteria)
@@ -65,7 +67,7 @@ async def evaluate_report_quality(
     # If TypeSafe AI is not configured, perform heuristic evaluation based on length and structure
     if not getattr(settings, "typesafe_ready", False):
         logger.info("TypeSafe AI not configured (TYPESAFE_API_KEY unset). Using heuristic quality evaluation.")
-        return _heuristic_quality_eval(sample_text=sample_text, mode=mode, threshold=threshold)
+        return _heuristic_quality_eval(sample_text=sample_text, mode=mode, threshold=eff_threshold)
 
     try:
         from chat_agent.utils.fast_decision.typesafe_integrator import get_client
@@ -128,22 +130,22 @@ async def evaluate_report_quality(
             "references_present": 0.10,
         }
         composite = round(sum(scores.get(d, 0.0) * w for d, w in weights.items()), 4)
-        passed = composite >= threshold
+        passed = composite >= eff_threshold
         logger.info(
             "[TypeSafe JEV Quality] Evaluated '%s': composite=%.2f (threshold=%.2f, passed=%s) | scores=%s",
             clean_topic,
             composite,
-            threshold,
+            eff_threshold,
             passed,
             scores,
         )
 
         critique = ""
         if not passed:
-            failed_dims = [d for d, s in scores.items() if s < threshold]
+            failed_dims = [d for d, s in scores.items() if s < eff_threshold]
             critique_points = [f"- {CRITIQUE_MAPPINGS.get(d, d)} (Score: {scores.get(d, 0.0):.2f})" for d in failed_dims]
             critique = (
-                f"JEV Evaluation Deficiencies (Composite Score {composite:.2f} < {threshold}):\n"
+                f"JEV Evaluation Deficiencies (Composite Score {composite:.2f} < {eff_threshold}):\n"
                 + "\n".join(critique_points)
             )
 
@@ -158,4 +160,4 @@ async def evaluate_report_quality(
             "JEV evaluation failed (%s). Falling back to heuristic quality evaluation.",
             exc,
         )
-        return _heuristic_quality_eval(sample_text=sample_text, mode=mode, threshold=threshold)
+        return _heuristic_quality_eval(sample_text=sample_text, mode=mode, threshold=eff_threshold)

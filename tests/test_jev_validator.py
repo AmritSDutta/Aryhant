@@ -45,13 +45,13 @@ async def test_jev_validator_critique_derivation_on_failure():
     mock_client = AsyncMock()
     mock_response = MagicMock()
 
-    # Low scores on article depth and references
+    # Low scores on article depth and references (composite < 0.60)
     mock_response.nouls = {
-        "user_criteria": MagicMock(noul=0.80),
-        "article_depth": MagicMock(noul=0.55),
-        "clarity": MagicMock(noul=0.85),
-        "human_readability": MagicMock(noul=0.80),
-        "references_present": MagicMock(noul=0.50),
+        "user_criteria": MagicMock(noul=0.60),
+        "article_depth": MagicMock(noul=0.45),
+        "clarity": MagicMock(noul=0.65),
+        "human_readability": MagicMock(noul=0.55),
+        "references_present": MagicMock(noul=0.40),
     }
     mock_client.system_one.return_value = mock_response
 
@@ -66,7 +66,7 @@ async def test_jev_validator_critique_derivation_on_failure():
         )
 
         assert res.passed is False
-        assert res.composite_score < 0.75
+        assert res.composite_score < 0.60
         assert "JEV Evaluation Deficiencies" in res.critique
         assert "Deepen substantive and conceptual depth" in res.critique or "Ground content with authoritative references" in res.critique
 

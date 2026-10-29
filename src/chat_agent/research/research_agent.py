@@ -470,12 +470,13 @@ class DualResearchAgent:
                     mode=mode,
                 )
 
+                eff_threshold = getattr(settings, "JEV_COMPOSITE_SCORE_THRESHOLD", 0.60)
                 if jev_res.passed or attempt == max_attempts:
-                    pass_label = f"score {jev_res.composite_score:.2f} >= 0.75" if jev_res.passed else f"final attempt {attempt}"
+                    pass_label = f"score {jev_res.composite_score:.2f} >= {eff_threshold:.2f}" if jev_res.passed else f"final attempt {attempt}"
                     await _emit_internal_notice(f"Checkpoint (JEV Evaluation): {pass_label} (Passed)")
                     break
                 else:
-                    await _emit_internal_notice(f"JEV score {jev_res.composite_score:.2f} < 0.75. Re-synthesizing with critique...")
+                    await _emit_internal_notice(f"JEV score {jev_res.composite_score:.2f} < {eff_threshold:.2f}. Re-synthesizing with critique...")
                     await _update_slack("synthesize", TaskStatus.IN_PROGRESS, f"Refining draft with JEV critique (score {jev_res.composite_score:.2f})")
                     critique_directive = jev_res.critique
 

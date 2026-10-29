@@ -120,6 +120,7 @@ class Settings(BaseSettings):
     OPENSEARCH_URL_AIVEN: str = ""
     OPENSEARCH_INDEX_NAME: str = "llm_waste"
     TYPESAFE_API_KEY: str = ""
+    JEV_COMPOSITE_SCORE_THRESHOLD: float = 0.60
 
     FIRST_CHOICE_MODELS: list[str] = [
         "gemini-3.1-flash-lite",
@@ -275,6 +276,10 @@ class Settings(BaseSettings):
     @property
     def typesafe_api_key(self) -> str:
         return self.TYPESAFE_API_KEY
+
+    @property
+    def jev_composite_score_threshold(self) -> float:
+        return self.JEV_COMPOSITE_SCORE_THRESHOLD
 
     @property
     def typesafe_ready(self) -> bool:

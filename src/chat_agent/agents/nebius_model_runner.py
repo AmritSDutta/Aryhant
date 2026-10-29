@@ -8,7 +8,10 @@ import logging
 import os
 import random
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from openai import AsyncOpenAI
 
 from google.genai import types
 
@@ -200,11 +203,31 @@ def _build_nebius_content(content: types.Content) -> str | list[dict[str, Any]]:
     """Convert types.Content parts into OpenAI/Nebius text or multimodal content items."""
     parts = getattr(content, "parts", None) or []
     has_images = any(
-        getattr(p, "inline_data", None) and getattr(p.inline_data, "data", None)
+        getattr(p, "inline_data", None)
+        and getattr(p.inline_data, "data", None)
+        and (getattr(p.inline_data, "mime_type", "") or "").lower() != "application/pdf"
         for p in parts
     )
     if not has_images:
-        return "".join(getattr(p, "text", "") for p in parts) or "Hello"
+        text_chunks: list[str] = []
+        for p in parts:
+            text = getattr(p, "text", None)
+            if text:
+                text_chunks.append(text)
+                continue
+            inline_data = getattr(p, "inline_data", None)
+            if inline_data and getattr(inline_data, "data", None):
+                mime = (getattr(inline_data, "mime_type", "") or "").lower()
+                if mime == "application/pdf":
+                    from chat_agent.utils.pdf_extractor import extract_pdf_markdown
+
+                    pdf_text = extract_pdf_markdown(inline_data.data)
+                    text_chunks.append(
+                        f"\n\n[PDF content:\n{pdf_text}\n]"
+                        if pdf_text
+                        else "\n\n[Attached PDF: empty or unreadable]"
+                    )
+        return "\n".join(t for t in text_chunks if t).strip() or "Hello"
 
     items: list[dict[str, Any]] = []
     for p in parts:
@@ -214,12 +237,23 @@ def _build_nebius_content(content: types.Content) -> str | list[dict[str, Any]]:
             continue
         inline_data = getattr(p, "inline_data", None)
         if inline_data and getattr(inline_data, "data", None):
-            mime = getattr(inline_data, "mime_type", "image/jpeg")
-            b64_str = base64.b64encode(inline_data.data).decode("utf-8")
-            items.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{b64_str}"},
-            })
+            mime = (getattr(inline_data, "mime_type", "") or "image/jpeg").lower()
+            if mime == "application/pdf":
+                from chat_agent.utils.pdf_extractor import extract_pdf_markdown
+
+                pdf_text = extract_pdf_markdown(inline_data.data)
+                formatted = (
+                    f"\n\n[PDF content:\n{pdf_text}\n]"
+                    if pdf_text
+                    else "\n\n[Attached PDF: empty or unreadable]"
+                )
+                items.append({"type": "text", "text": formatted})
+            else:
+                b64_str = base64.b64encode(inline_data.data).decode("utf-8")
+                items.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{b64_str}"},
+                })
     return items if items else "Hello"
 
 
@@ -269,6 +303,49 @@ async def _save_nebius_history(session_id: str, user_content: str | list[dict[st
     await store.append_exchange(session_id, clean_text, reply, assistant_role="assistant")
 
 
+_CLIENT_CACHE: dict[tuple[str, str], AsyncOpenAI] = {}
+
+
+def _get_openai_client(api_key: str, base_url: str) -> AsyncOpenAI:
+    """Return a cached AsyncOpenAI client per (api_key, base_url) to avoid per-turn TLS handshakes."""
+    from openai import AsyncOpenAI
+
+    cache_key = (api_key, base_url)
+    if cache_key not in _CLIENT_CACHE:
+        _CLIENT_CACHE[cache_key] = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=180.0)
+    return _CLIENT_CACHE[cache_key]
+
+
+async def _extract_image_content(
+    multimodal_content: list[dict[str, Any]],
+    api_key: str,
+    base_url: str,
+    vl_model: str,
+) -> str:
+    """One VL call to transcribe/describe image content without solving it; empty string on failure."""
+    extraction_instruction = (
+        "Transcribe all text visible in the image exactly, then describe any diagrams, figures, "
+        "or layout factually. Do not solve, answer, or explain the content."
+    )
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": extraction_instruction},
+        {"role": "user", "content": multimodal_content},
+    ]
+    try:
+        reply = await _call_nebius_completion(
+            model=vl_model,
+            messages=messages,
+            api_key=api_key,
+            base_url=base_url,
+            enable_tools=False,
+            max_tokens=1200,
+        )
+        return (reply or "").strip()
+    except Exception as e:
+        logger.warning("[Model Routing] VL extraction call failed: %s", e)
+        return ""
+
+
 async def _call_nebius_completion(
     model: str,
     messages: list[dict[str, Any]],
@@ -282,9 +359,7 @@ async def _call_nebius_completion(
     convo = list(messages)
     effective_max_tokens = max_tokens or settings.max_output_tokens
     try:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=180.0)
+        client = _get_openai_client(api_key, base_url)
         for _ in range(_MAX_TOOL_ROUNDS):
             call_kwargs: dict[str, Any] = {
                 "model": model,
@@ -431,17 +506,36 @@ class NebiusModelRunner:
         system_instruction: str | None = None,
         enable_tools: bool = True,
         max_tokens: int | None = None,
+        history: list[dict[str, Any]] | None = None,
     ) -> str:
-        """Execute chat request against Nebius vision model with retries and fallback."""
+        """Execute chat request with Nano/VL routing, retries and fallback."""
         user_content = _build_nebius_content(content)
 
         api_key = getattr(settings, "NEBIUS_API_KEY", "") or os.getenv("NEBIUS_API_KEY", "")
         base_url = getattr(settings, "NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
-        model = getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
+        chat_model = getattr(settings, "NEBIUS_CHAT_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        vl_model = getattr(settings, "NEBIUS_MODEL", "nvidia/Nemotron-3.5-Super-VL")
+
+        if isinstance(user_content, list):
+            logger.info("[Model Routing] Image turn: extracting image content with VL '%s'", vl_model)
+            extraction = ""
+            if api_key:
+                extraction = await _extract_image_content(user_content, api_key, base_url, vl_model)
+            if extraction:
+                text_bits = [i.get("text", "") for i in user_content if i.get("type") == "text"]
+                user_text = "\n".join(t for t in text_bits if t).strip() or "Explain the attached image."
+                user_content = f"{user_text}\n\n[Image content: {extraction}]"
+                model = chat_model
+            else:
+                logger.warning("[Model Routing] VL extraction failed; answering directly on VL '%s'", vl_model)
+                model = vl_model
+        else:
+            logger.info("[Model Routing] Text turn: routing to chat model '%s'", chat_model)
+            model = chat_model
 
         sys_content = system_instruction if system_instruction is not None else _system_prompt(user_memory_context)
         messages: list[dict[str, Any]] = [{"role": "system", "content": sys_content}]
-        messages.extend(await _get_nebius_history(session_id))
+        messages.extend(history if history is not None else await _get_nebius_history(session_id))
         messages.append({"role": "user", "content": user_content})
 
         if api_key:

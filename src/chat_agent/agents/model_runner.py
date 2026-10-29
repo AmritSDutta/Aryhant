@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from google.genai import types
 
@@ -23,6 +23,7 @@ class ModelRunner(Protocol):
         system_instruction: str | None = None,
         enable_tools: bool = True,
         max_tokens: int | None = None,
+        history: list[dict[str, Any]] | None = None,
     ) -> str:
         """Execute model with user message content and session context."""
         ...

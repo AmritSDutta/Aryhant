@@ -21,6 +21,7 @@ from chat_agent.utils.openai_utility import (
     generate_summaries,
 )
 from chat_agent.utils.path_utils import resolve_csv_path
+from chat_agent.utils.pdf_extractor import extract_pdf_markdown
 
 __all__ = [
     "scan_for_vulnerability",
@@ -40,6 +41,7 @@ __all__ = [
     "extract_and_download_slack_attachments",
     "validate_multimodal_payload",
     "build_adk_multimodal_content",
+    "extract_pdf_markdown",
 ]
 
 

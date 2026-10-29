@@ -343,9 +343,10 @@ async def test_slack_authorization_check():
         "ok": True,
         "user": {"profile": {"email": "unauthorized@unknown.com", "real_name": "Test"}},
     }
-    is_allowed, _, _, email = await check_slack_authorization(mock_client, "U_UNAUTH", notify_on_deny=False)
-    assert is_allowed is False
-    assert email == "unauthorized@unknown.com"
+    with patch("chat_agent.slack.slack_auth.settings.ARYHANT_ALLOWED_EMAILS", "allowed@example.com"):
+        is_allowed, _, _, email = await check_slack_authorization(mock_client, "U_UNAUTH", notify_on_deny=False)
+        assert is_allowed is False
+        assert email == "unauthorized@unknown.com"
 
 
 @pytest.mark.asyncio

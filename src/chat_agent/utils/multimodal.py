@@ -1,5 +1,6 @@
 """Multimodal processing utilities for Slack attachments and Google ADK content parts."""
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -91,25 +92,47 @@ async def extract_and_download_slack_attachments(
         return []
 
     attachments: List[Tuple[bytes, str]] = []
-    cumulative_bytes = 0
     max_cumulative = settings.MAX_CUMULATIVE_ATTACHMENT_SIZE_MB * 1024 * 1024
 
-    for sf in slack_files:
+    async def _download_one(sf: Dict[str, Any]) -> Optional[Tuple[bytes, str]]:
         try:
             data, _ = await download_slack_file(sf["url"], bot_token=bot_token)
-            if cumulative_bytes + len(data) > max_cumulative:
-                logger.warning(
-                    "Skipping attachment %s: cumulative size limit of %d bytes exceeded.",
-                    sf.get("name"),
-                    max_cumulative,
-                )
-                break
-            # Preserve authoritative Slack metadata MIME type
-            mimetype = sf.get("mimetype") or "application/octet-stream"
-            attachments.append((data, mimetype))
-            cumulative_bytes += len(data)
         except Exception as dl_err:
             logger.warning("Failed to download Slack attachment %s: %s", sf.get("name"), dl_err)
+            return None
+        # Preserve authoritative Slack metadata MIME type
+        mimetype = sf.get("mimetype") or "application/octet-stream"
+        return (data, mimetype)
+
+    valid_files: List[Dict[str, Any]] = []
+    projected_bytes = 0
+    for sf in slack_files:
+        reported_size = sf.get("size", 0)
+        if reported_size > 0 and (projected_bytes + reported_size > max_cumulative):
+            logger.warning(
+                "Skipping attachment %s: projected cumulative size limit of %d bytes exceeded.",
+                sf.get("name"),
+                max_cumulative,
+            )
+            break
+        valid_files.append(sf)
+        if reported_size > 0:
+            projected_bytes += reported_size
+
+    results = await asyncio.gather(*[_download_one(sf) for sf in valid_files])
+    cumulative_bytes = 0
+    for item in results:
+        if item is None:
+            continue
+        data, mimetype = item
+        if cumulative_bytes + len(data) > max_cumulative:
+            logger.warning(
+                "Skipping attachment: cumulative size limit of %d bytes exceeded.",
+                max_cumulative,
+            )
+            break
+        attachments.append((data, mimetype))
+        cumulative_bytes += len(data)
 
     return attachments
 

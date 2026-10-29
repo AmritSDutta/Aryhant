@@ -406,6 +406,7 @@ class GeminiModelRunner:
         system_instruction: str | None = None,
         enable_tools: bool = True,
         max_tokens: int | None = None,
+        history: list[dict[str, Any]] | None = None,  # unused: Gemini keeps its own Content history
     ) -> str:
         """Execute Gemini model with retries and fallback."""
         _prune_prior_binary_parts(session_id)

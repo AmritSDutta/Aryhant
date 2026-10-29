@@ -1,5 +1,6 @@
 """Hermetic unit tests for the direct LLM engine, runner dispatch, and text clipping."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -186,6 +187,8 @@ async def test_failed_attempt_does_not_duplicate_history():
         session_id: str = "",
         system_instruction: str | None = None,
         enable_tools: bool = True,
+        max_tokens: int | None = None,
+        **kwargs: Any,
     ) -> str:
         calls["count"] += 1
         if calls["count"] == 1:
@@ -249,21 +252,37 @@ async def test_nebius_model_runner_multimodal_vision_input():
     part_image = types.Part.from_bytes(data=b"fake-image-bytes", mime_type="image/png")
     content = types.Content(parts=[part_text, part_image])
 
+    async def _fake_completion(**kwargs):
+        if kwargs.get("enable_tools", True) is False:
+            return "TRANSCRIPT: a cat on a mat"
+        return "Image description from Nemotron"
+
     with patch(
         "chat_agent.agents.nebius_model_runner._call_nebius_completion",
-        new_callable=AsyncMock,
-        return_value="Image description from Nemotron",
+        new=AsyncMock(side_effect=_fake_completion),
     ) as mock_call, patch(
         "chat_agent.agents.nebius_model_runner.settings.NEBIUS_API_KEY", "mock-nebius-key"
     ):
         reply = await runner.run("u1", "s-nebius-vision", content)
         assert reply == "Image description from Nemotron"
-        call_messages = mock_call.call_args[1]["messages"]
-        user_msg = call_messages[-1]
-        assert isinstance(user_msg["content"], list)
-        assert user_msg["content"][0]["type"] == "text"
-        assert user_msg["content"][1]["type"] == "image_url"
-        assert user_msg["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+        assert mock_call.call_count == 2
+
+        # Phase 1: VL extraction call receives the raw image parts.
+        extraction_kwargs = mock_call.call_args_list[0][1]
+        assert extraction_kwargs["model"] == "nvidia/Nemotron-3.5-Super-VL"
+        assert extraction_kwargs["enable_tools"] is False
+        extraction_msg = extraction_kwargs["messages"][-1]
+        assert isinstance(extraction_msg["content"], list)
+        assert extraction_msg["content"][0]["type"] == "text"
+        assert extraction_msg["content"][1]["type"] == "image_url"
+        assert extraction_msg["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+        # Phase 2: Nano answers with text-only content containing the extraction.
+        answer_kwargs = mock_call.call_args_list[1][1]
+        assert answer_kwargs["model"] == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+        answer_content = answer_kwargs["messages"][-1]["content"]
+        assert isinstance(answer_content, str)
+        assert "[Image content: TRANSCRIPT: a cat on a mat]" in answer_content
 
 
 @pytest.mark.asyncio

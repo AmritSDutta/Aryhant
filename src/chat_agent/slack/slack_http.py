@@ -184,21 +184,46 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
         from chat_agent.services.turso_memory_service import get_turso_memory_service
 
         user_id_key = f"slack:{user}"
-        turso_svc = get_turso_memory_service()
-        try:
-            memory_context = await turso_svc.aget_user_memory_context(user_id_key)
-        except Exception as exc:
-            logger.warning("Failed to fetch memory context in Slack HTTP handler for %s: %s", user_id_key, exc)
-            memory_context = "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
-        prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{event_text(event)}"
-
-        attachments: list[tuple[bytes, str]] = []
-        if settings.MULTIMODAL_ENABLED:
-            from chat_agent.utils.multimodal import extract_and_download_slack_attachments
-
-            attachments = await extract_and_download_slack_attachments(event)
-
         session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
+        turso_svc = get_turso_memory_service()
+
+        async def _fetch_memory() -> str:
+            try:
+                return await turso_svc.aget_user_memory_context(user_id_key)
+            except Exception as exc:
+                logger.warning("Failed to fetch memory context in Slack HTTP handler for %s: %s", user_id_key, exc)
+                return "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
+
+        async def _fetch_attachments() -> list[tuple[bytes, str]]:
+            if not settings.MULTIMODAL_ENABLED:
+                return []
+            try:
+                from chat_agent.utils.multimodal import extract_and_download_slack_attachments
+
+                return await extract_and_download_slack_attachments(event)
+            except Exception as exc:
+                logger.warning("Attachment download failed in Slack HTTP handler: %s", exc)
+                return []
+
+        raw_event_text = event_text(event).strip()
+
+        async def _fetch_history() -> list | None:
+            if getattr(settings, "MODEL_PROVIDER", "nebius") != "nebius":
+                return None
+            if raw_event_text.startswith(("/admin", "/audit", "admin", "audit", "/research", "research", "/deliberate", "deliberate")):
+                return None
+            try:
+                from chat_agent.agents.nebius_model_runner import _get_nebius_history
+
+                return await _get_nebius_history(session_id)
+            except Exception as exc:
+                logger.warning("History prefetch failed in Slack HTTP handler for %s: %s", session_id, exc)
+                return None
+
+        memory_context, attachments, session_history = await asyncio.gather(
+            _fetch_memory(), _fetch_attachments(), _fetch_history()
+        )
+        prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{event_text(event)}"
 
         raw_text = event_text(event).strip()
         from chat_agent.research.dispatcher import (
@@ -306,6 +331,7 @@ async def handle_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
             message=prompt,
             attachments=attachments,
             user_memory_context=memory_context,
+            history=session_history,
         )
         post_data = generate_slack_post(reply)
         await post_slack_message(

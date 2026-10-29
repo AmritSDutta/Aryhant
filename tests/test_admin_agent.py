@@ -239,6 +239,8 @@ async def test_admin_agent_nebius_tool_dispatch_loop(mock_db_service: SessionTas
     mock_client.chat.completions.create = AsyncMock(side_effect=[resp1, resp2])
 
     with patch("openai.AsyncOpenAI", return_value=mock_client), patch(
+        "chat_agent.agents.admin_agent.settings.NEBIUS_API_KEY", "test-nebius-key"
+    ), patch(
         "chat_agent.agents.admin_agent.search_context7",
         new_callable=AsyncMock,
         return_value={"code_snippets": [{"title": "Turso DB Guide", "code": "conn.close()"}]},

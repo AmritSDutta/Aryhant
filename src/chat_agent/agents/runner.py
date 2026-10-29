@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from google.genai import types
 
@@ -29,6 +30,7 @@ async def run_agent(
     attachments: list[tuple[bytes, str]] | None = None,
     custom_content: types.Content | None = None,
     user_memory_context: str | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> str:
     """Execute the configured model runner asynchronously with text and optional attachments."""
     try:
@@ -72,6 +74,7 @@ async def run_agent(
         session_id=session_id,
         content=content,
         user_memory_context=user_memory_context,
+        history=history,
     )
     from chat_agent.utils.text_formatter import format_human_readable_text
 

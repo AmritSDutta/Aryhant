@@ -56,5 +56,5 @@ def test_qa_generator_instruction_schema_and_no_preamble() -> None:
 def test_research_prompts_integrity() -> None:
     """Verify technical and deliberation research prompts do not contain rigid legacy couplings."""
     assert "Context7" not in TECHNICAL_SYSTEM_PROMPT
-    assert "Incorporate any provided code snippets" in TECHNICAL_SYSTEM_PROMPT
+    assert "publication-grade technical report" in TECHNICAL_SYSTEM_PROMPT
     assert "For abstract decisions, provide a structured criteria evaluation" in DELIBERATION_SYSTEM_PROMPT

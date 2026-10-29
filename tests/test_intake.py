@@ -41,7 +41,7 @@ def test_formulate_scope_modes():
     assert any("question" in sc.lower() for sc in q_scope["success_criteria"])
 
     delib_scope = formulate_scope("Best Term Life Insurance", ResearchMode.DELIBERATE)
-    assert "decision guide" in delib_scope["objective"].lower()
+    assert "decision and buying guide" in delib_scope["objective"].lower()
     assert any("matrix" in f.lower() for f in delib_scope["focus_areas"])
 
 

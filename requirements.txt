@@ -31,3 +31,4 @@ libsql>=0.1.11
 redis>=5.0.0
 agentmail>=0.5.0
 svix>=1.0.0
+liteparse>=2.0.0

@@ -442,17 +442,15 @@ class AdminAgent:
                 "recent_failures": sanitized_recent_failures,
             }
 
-            user_prompt = f"""Operational Telemetry & Retention Audit for session_tasks:
-                ```json
-                {json.dumps(telemetry_payload, indent=2)}
-                ```
-                
-                You have access to ADMIN_TOOLS (`search_context7` and `search_web`). 
-                If there are any recent failures or anomalies,  use these tools to investigate root causes. 
-                Synthesize the complete audit into the mandatory SINGLE Markdown Data Table
-                format starting with '# ✅ Administrative & Operations Audit'. 
-                Report all metrics accurately without omitting any telemetry figures.
-                """
+            user_prompt = (
+                f"Operational Telemetry & Retention Audit for session_tasks:\n"
+                f"```json\n{json.dumps(telemetry_payload, indent=2)}\n```\n\n"
+                "You have access to ADMIN_TOOLS (`search_context7` and `search_web`). "
+                "If there are any recent failures or anomalies, use these tools to investigate root causes. "
+                "Synthesize the complete audit into the mandatory SINGLE Markdown Data Table "
+                "format starting with '# ✅ Administrative & Operations Audit'. "
+                "Report all metrics accurately without omitting any telemetry figures."
+            )
 
             # Step 5: Model execution with tool dispatch
             logger.info(

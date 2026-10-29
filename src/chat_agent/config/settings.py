@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     NEBIUS_API_KEY: str = ""
     NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
     NEBIUS_MODEL: str = "nvidia/Nemotron-3.5-Super-VL"
+    NEBIUS_CHAT_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
     QUESTION_GENERATOR_PROVIDER: str = "nebius"  # "gemini"
     QUESTION_GENERATOR_MODEL: str = "gemini-flash-lite-latest"
     NEBIUS_QUESTION_MODEL: str = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"

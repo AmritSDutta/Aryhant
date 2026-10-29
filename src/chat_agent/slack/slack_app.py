@@ -270,23 +270,45 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
         _BACKGROUND_TASKS.add(profile_task)
         profile_task.add_done_callback(_BACKGROUND_TASKS.discard)
 
-    try:
-        memory_context = await turso_svc.aget_user_memory_context(user_id_key)
-    except Exception as exc:
-        logger.warning("Failed to fetch memory context in Slack app handler for %s: %s", user_id_key, exc)
-        memory_context = "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
-    prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{clip_text(text)}"
+    session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
 
-    attachments: list[tuple[bytes, str]] = []
-    if settings.MULTIMODAL_ENABLED:
+    async def _fetch_memory() -> str:
+        try:
+            return await turso_svc.aget_user_memory_context(user_id_key)
+        except Exception as exc:
+            logger.warning("Failed to fetch memory context in Slack app handler for %s: %s", user_id_key, exc)
+            return "No specific stored preferences yet; use standard ICSE Grade 5 balanced explanations."
+
+    async def _fetch_attachments() -> list[tuple[bytes, str]]:
+        if not settings.MULTIMODAL_ENABLED:
+            return []
         try:
             from chat_agent.utils.multimodal import extract_and_download_slack_attachments
 
-            attachments = await extract_and_download_slack_attachments(event)
+            return await extract_and_download_slack_attachments(event)
         except Exception as err:
             logger.warning("Failed to download Slack attachments: %s", err)
+            return []
 
-    session_id = f"slack:{channel}:{thread_ts}" if thread_ts else f"slack:{channel}:{msg_ts}"
+    clean_text = text.strip()
+
+    async def _fetch_history() -> list | None:
+        if getattr(settings, "MODEL_PROVIDER", "nebius") != "nebius":
+            return None
+        if clean_text.startswith(("/admin", "/audit", "admin", "audit", "/research", "research", "/deliberate", "deliberate")):
+            return None
+        try:
+            from chat_agent.agents.nebius_model_runner import _get_nebius_history
+
+            return await _get_nebius_history(session_id)
+        except Exception as exc:
+            logger.warning("History prefetch failed in Slack app handler for %s: %s", session_id, exc)
+            return None
+
+    memory_context, attachments, session_history = await asyncio.gather(
+        _fetch_memory(), _fetch_attachments(), _fetch_history()
+    )
+    prompt = f"[channel=slack channel_id={channel} thread_ts={thread_ts or msg_ts} user_id={user_id_key}]\n{clip_text(text)}"
 
     from chat_agent.research.dispatcher import (
         RESEARCH_CONCURRENCY_SEMAPHORE,
@@ -369,6 +391,7 @@ async def _handle_event(app: Any, event: dict[str, Any]) -> None:
             message=prompt,
             attachments=attachments,
             user_memory_context=memory_context,
+            history=session_history,
         )
     except Exception as err:
         logger.error("Agent failed for Slack event %s: %s", msg_ts, err)

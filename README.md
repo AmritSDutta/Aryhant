@@ -2,7 +2,7 @@
 
 An always-on personal AI companion powered by **Nebius Token Factory** running **NVIDIA Nemotron** open source models, delivered through Slack, a web UI, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous deep technical research with 24-hour failover resume. Gemini and OpenAI models serve as automatic fallbacks only.
 
-> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, and 24-hour resilient deep research whitepapers are fully implemented.
+> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, 24-hour resilient deep research whitepapers, a subject-wise ICSE syllabus store, and an AgentMail administrative email channel are fully implemented.
 
 ## Powered by Nebius Token Factory & NVIDIA Nemotron
 
@@ -19,10 +19,10 @@ See [docs/nebius.mdx](docs/nebius.mdx) for the full architecture. Gemini (Google
 | Capability | Current state |
 | --- | --- |
 | Daily Companion & Assistant | Broad day-to-day assistance for inquiries, personal organization, writing, explanations, research, and practical advice (with coding placed last) |
-| Grade 5 ICSE Teaching Specialization | Tailored for St. Xavier's Grade 5 ICSE syllabus: plain-text math (`3/5`, `cm²`, `+`, `-`, `x`, `÷`), 5–10 numbered practice questions, and answer keys grouped at the end |
+| Grade 5 ICSE Teaching Specialization | Tailored for St. Xavier's Grade 5 ICSE syllabus: plain-text math (`3/5`, `cm²`, `+`, `-`, `x`, `÷`), 5–10 numbered practice questions, and answer keys grouped at the end. Teaching is grounded in a stored subject-wise syllabus (Turso `icse_syllabus` table) exposed to the agents as the `get_icse_syllabus` tool with fuzzy subject matching |
 | Question Generation & TypeSafe Curation | Generates 15–20 candidate practice questions and hints via secondary LLM agent (`QA_GENERATOR_INSTRUCTION`), and uses TypeSafe AI System One (`Noul`) for parallel hint scoring and top-10 curation |
 | Universal PDF Notes & Infographics | ReportLab handwritten notebook notes (`generate_study_notes_pdf`) and visual posters (`generate_infographic_pdf`) on **any topic** compiled on background threads and auto-uploaded to Slack threads |
-| Resilient Deep Research & Deliberation (Role 3) | Autonomous research pipeline (`/research`, `/deliberate`) delivering ~2,500-word ReportLab PDF whitepapers, 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
+| Resilient Deep Research & Deliberation (Role 3) | Autonomous research pipeline delivering ~2,500-word whitepaper PDFs (`/research`) and ~1,500-word Decision Guide PDFs with comparative matrices (`/deliberate`), 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
 | Direct Multi-Model Engine | Direct Google GenAI SDK (`google.genai.Client`) with 3 random attempts across `FIRST_CHOICE_MODELS` and automatic failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` / `httpx` |
 | Procedural Diagrams | Dynamic math and science diagram generator (parabolas, waves, geometric figures, circuits, biological structures) |
 | Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with size budgets and prior-turn binary attachment pruning |
@@ -31,39 +31,65 @@ See [docs/nebius.mdx](docs/nebius.mdx) for the full architecture. Gemini (Google
 | Slack Over HTTP | Event filtering, threaded replies, and scale-to-zero proxying via Cloudflare Worker and Upstash QStash |
 | REST API | FastAPI `/api/chat` (Auth0 protected when `REQUIRE_AUTH=true`, 20/min rate limit), `/api/health`, `/webhooks/slack` |
 | Web UI (Cloudflare Pages) | Modern React 18 + Vite SPA in `/ui` with Lora font, Auth0 PKCE login, and real-time ICSE chat companion |
-| Email | IMAP unread-message polling and SMTP replies |
+| Email (AgentMail) | Aryhant's own [AgentMail](https://agentmail.to) inbox: inbound email is ACKed by the same Cloudflare Worker (`/agentmail`, <50ms) and delivered via QStash to `/api/communicate`. Sender allowlist and admin-query gating; reports are written by Nemotron; unauthorized mail is dropped silently at zero token cost. See [docs/communicate-agentmail.mdx](docs/communicate-agentmail.mdx) |
 | Conversation State (Tier 1) | Private Upstash Redis with strict `aryhant:` prefix enforcement, 20-turn sliding window (`LTRIM`), and 24-hour TTL |
 | Personal Memory & Skills (Tier 2) | Remote Turso (libSQL) long-term memory engine with multi-script tokenization (English, Hindi, Bengali), user email persistence, and interactive `/preferences` Slack modal |
 | Autonomous Telemetry & Data Hygiene (Role 4) | Autonomous AdminAgent running deterministic 15-day retention pruning, 7-day metric aggregation, and Context7 / web failure diagnostics via /admin and /audit |
 
 ## Recommended cloud architecture
 
+One multi-path Cloudflare Worker fronts both webhook sources (Slack and AgentMail), instant-ACKs each in under 50ms, and lets Upstash QStash buffer events through Cloud Run cold starts — so the container scales to zero when idle. All primary inference runs on NVIDIA Nemotron models served by Nebius Token Factory.
+
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Slack User
-    participant Slack as Slack API Events
+    actor Student as Slack User (mobile / desktop)
+    actor Parent as Email Sender
+    participant Slack as Slack Events API
+    participant AM as AgentMail Inbox
     participant CF as Cloudflare Worker (proxies/cloudflare-slack-ack.js)
     participant QStash as Upstash QStash
-    participant Run as Cloud Run (chat_agent.app:app)
-    participant Engine as Direct GenAI / GPT Engine
-    participant Notes as Background Notes Engine
+    participant Run as Cloud Run (chat_agent.app:app, scale-to-zero)
+    participant TF as Nebius Token Factory (Nemotron)
+    participant State as Redis sessions + Turso memory & syllabus
     participant SlackAPI as Slack Web API
-    User->>Slack: @Aryhant "Generate study notes on Fractions"
-    Slack->>CF: POST event (expects 200 within 3s)
-    CF-->>Slack: HTTP 200 OK (Instant ACK)
-    CF->>QStash: Enqueue event (POST /v2/publish/...)
-    QStash->>Run: POST /webhooks/slack (retries on cold start)
-    Run->>Run: authorize_webhook() verifies secret
+
+    rect rgb(245, 248, 250)
+    note over Student,State: Slack path — chat, tutoring, notes & research
+    Student->>Slack: @Aryhant "Generate study notes on Fractions"
+    Slack->>CF: POST / (expects 200 within 3s)
+    CF-->>Slack: HTTP 200 OK (instant ACK <50ms)
+    CF->>QStash: Enqueue event
+    QStash->>Run: POST /webhooks/slack (retries through cold start)
+    Run->>Run: verify QStash signature + shared secret
     Run-->>QStash: HTTP 200 {"ok": true}
-    Run->>Engine: BackgroundTasks -> handle_slack_payload -> run_agent()
-    Engine->>Notes: generate_study_notes_pdf() [Background Thread]
-    Engine->>SlackAPI: chat.postMessage(channel, text_reply, thread_ts)
-    SlackAPI-->>User: Bot replies immediately in Slack thread
-    Notes->>Notes: Compile PDF with ReportLab & diagrams
-    Notes->>SlackAPI: upload_file_to_slack() -> files.uploadExternal
-    SlackAPI-->>User: PDF Study Notes delivered to thread
+    Run->>State: load 20-turn session, memory, syllabus
+    Run->>TF: run_agent() — chat / vision / tool calls (Nemotron-3.5-Super-VL)
+    TF-->>Run: reply (+ get_icse_syllabus, search_web tool results)
+    Run->>SlackAPI: chat.postMessage(text_reply, thread_ts)
+    Run->>TF: generate_study_notes_pdf [background thread]
+    TF-->>Run: compiled PDF (ReportLab)
+    Run->>SlackAPI: upload_file_to_slack() -> files.uploadExternal
+    SlackAPI-->>Student: reply in thread, then PDF study notes
+    end
+
+    rect rgb(245, 250, 245)
+    note over Parent,State: Email path — AgentMail ops reports
+    Parent->>AM: "Email me a usage audit"
+    AM->>CF: POST /agentmail webhook (message.received)
+    CF-->>AM: HTTP 200 OK (instant ACK <50ms)
+    CF->>QStash: Enqueue event
+    QStash->>Run: POST /api/communicate
+    Run->>Run: verify signature; sender allowlist + admin-keyword gate
+    Run->>State: aget_table_metrics(7), adelete_records_older_than(15)
+    Run->>TF: synthesize ops report (Nemotron-3-Nano-30B)
+    TF-->>Run: report text
+    Run->>AM: reply by message_id; label replied / unauthorized_sender
+    AM-->>Parent: audit report email
+    end
 ```
+
+> Gemini (Google AI Studio) and OpenAI are wired as last-resort model fallbacks only; unauthorized email is dropped before any model call. AgentMail webhook setup: see [docs/communicate-agentmail.mdx](docs/communicate-agentmail.mdx).
 
 ### Scale-to-Zero Slack Setup (Cloudflare + Upstash QStash)
 
@@ -147,7 +173,8 @@ Create an app at <https://api.slack.com/apps>:
 - Create an app-level token with `connections:write`.
 - Install the app and set `ARYHANT_SLACK_BOT_TOKEN` and `ARYHANT_SLACK_APP_TOKEN` in `.env`.
 - (Optional) Set `ARYHANT_ALLOWED_EMAILS` (comma-separated list of permitted emails) to enforce access control.
-- (Optional) Set `ARYHANT_TURSO_DATABASE_URL`, `ARYHANT_TURSO_AUTH_TOKEN`, and `ARYHANT_REDIS_URL` for durable long-term memory and session persistence.
+- (Optional) Set `ARYHANT_TURSO_DATABASE_URL`, `ARYHANT_TURSO_AUTH_TOKEN`, and `ARYHANT_REDIS_URL` for durable long-term memory and session persistence. Then initialize the schema and load the ICSE syllabus: `python scripts/init_turso_db.py && python scripts/seed_icse_syllabus.py`.
+- (Optional) For the AgentMail email channel, set `ARYHANT_AGENTMAIL_API_KEY` and `ARYHANT_AGENTMAIL_EMAILID` (see [docs/communicate-agentmail.mdx](docs/communicate-agentmail.mdx)).
 
 ```bash
 python -m chat_agent.main slack
@@ -162,7 +189,7 @@ src/chat_agent/          direct runner, prompt, config, tools, research, infogra
 src/chat_agent/app.py    FastAPI app: /api/*, /webhooks/*
 proxies/                 Cloudflare Worker source
 docs/                    docs7 documentation site
-tests/                   pytest hermetic test suite (197 tests)
+tests/                   pytest hermetic test suite (224 tests)
 ```
 
 ## Code map and tests
@@ -195,7 +222,7 @@ tests/                   pytest hermetic test suite (197 tests)
 | Slack Block Kit generator | [Post generator](src/chat_agent/slack/post_generator.py) |
 | FastAPI app and webhook authorization | [App](src/chat_agent/app.py), [Authorization](src/chat_agent/webhooks.py) |
 | Slack-to-QStash forwarding | [Cloudflare Worker](proxies/cloudflare-slack-ack.js) |
-| Unit tests (197 tests) | [Tests](tests/test_agent.py) |
+| Unit tests (224 tests) | [Tests](tests/test_agent.py) |
 
 Run tests:
 

@@ -32,7 +32,7 @@ cd ui; infisical run -- npm run dev                             # React UI dev s
 python -m chat_agent.main serve     # Slack Socket Mode
 python -m chat_agent.main chat --message "hi"   # one-shot local chat
 # other subcommands: slack | chat
-python -m pytest -q                 # all tests (197 passing tests)
+python -m pytest -q                 # all tests (224 passing tests)
 python -m pytest -q tests/test_slack.py                # one file
 python -m pytest -q tests/test_slack.py::test_name     # one test
 ```
@@ -57,7 +57,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   ├── research/                   # Role 3: Resilient deep research agent and whitepaper generation
 │   │   ├── engine.py               # 4 concurrent intelligence streams with per-tool status & cache reuse
 │   │   ├── faq_engine.py           # Concurrent async FAQ generation with 24h caching
-│   │   ├── intake.py               # Scope formulation, clarity check & 30s grace window
+│   │   ├── intake.py               # Scope formulation, clarity check & 20s grace window
 │   │   ├── jev_validator.py        # Multi-dimension JEV/Noul quality evaluator with critique retry loop
 │   │   ├── models.py               # ResearchJobState, ToolOutputEntry, TaskStatus schemas
 │   │   ├── pdf_builder.py          # 2,500-word ReportLab publication whitepaper & decision guide generator
@@ -89,7 +89,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   ├── app.py                      # FastAPI server (/api/chat, /api/health, /webhooks/*)
 │   ├── main.py                     # CLI entry point (serve, chat, slack subcommands)
 │   └── webhooks.py                 # Webhook authentication & endpoints
-├── tests/                          # Hermetic test suite with mocked external services (197 tests)
+├── tests/                          # Hermetic test suite with mocked external services (224 tests)
 ├── .github/workflows/ci.yml        # GitHub Actions CI (ruff non-blocking, pytest blocking)
 ├── Dockerfile                      # Production container image definition
 └── pyproject.toml                  # Project metadata, dependencies, and pytest configuration
@@ -131,5 +131,5 @@ Direct Google GenAI, Nebius & OpenAI model execution engine behind every channel
 - Channels (all call `run_agent`): `slack/slack_app.py` (Slack Bolt Socket Mode with `AsyncSocketModeHandler`), `slack/slack_http.py` (webhook events, threaded replies), `app.py` (FastAPI `/api/*`, `/webhooks/*`, rate limiting, QStash signature verification via `qstash_authentication.py`; webhook auth via `webhooks.py`), `main.py` (CLI orchestrator).
 - Multimodal flow in `utils/multimodal.py`: `extract_slack_files` → `download_slack_file` (Bearer bot token) → `validate_multimodal_payload` (regex + Groq prompt guard + OpenAI omni-moderation in `utils/input_validation.py`) → `build_adk_multimodal_content` (`types.Part.from_bytes`). Limits in settings: `MULTIMODAL_ENABLED`, `MAX_SINGLE_ATTACHMENT_SIZE_KB`, `MAX_CUMULATIVE_ATTACHMENT_SIZE_MB`, `MAX_ATTACHMENTS_PER_MESSAGE`.
 - Config: `config/settings.py` — single pydantic-settings `Settings` from env; strictly standardizes on `ARYHANT_TURSO_DATABASE_URL`, `ARYHANT_TURSO_AUTH_TOKEN`, `ARYHANT_REDIS_URL`, and `ARYHANT_ALLOWED_EMAILS`. No legacy fallback aliases.
-- Tests are hermetic (all HTTP/LLM/Slack calls mocked; 197 tests pass with zero external keys); `tests/conftest.py` provides `mock_settings` and a FastAPI `TestClient`. pytest config lives in `pyproject.toml`.
+- Tests are hermetic (all HTTP/LLM/Slack calls mocked; 224 tests pass with zero external keys); `tests/conftest.py` provides `mock_settings` and a FastAPI `TestClient`. pytest config lives in `pyproject.toml`.
 - `docs/` is a docs7 documentation site (`docs.json` + `*.mdx`).

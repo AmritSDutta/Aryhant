@@ -14,6 +14,7 @@ This guide is written for students, parents, teachers, and Slack workspace membe
 - **In Direct Messages (DMs)**: Simply send your message directly to Aryhant without tagging.
   > *Can you help me practice factors and multiples?*
 - **In Message Threads**: When Aryhant replies in a thread, keep the conversation going in that thread to maintain conversation history.
+- **From a Desktop Browser**: The same assistant is also available on the Aryhant web page — handy for longer, sit-down sessions.
 - **Dedicated Slash Commands**:
   - `/research <topic>`: Generates a 2,500-word deep technical whitepaper PDF with verified code.
   - `/deliberate <question>`: Generates a 1,500-word Decision Guide PDF with comparative evaluation matrices.
@@ -43,6 +44,13 @@ When solving word problems or multi-step arithmetic, Aryhant verifies calculatio
 > *@Aryhant A rectangular garden is 12 metres long and 8 metres wide. If a path 1 metre wide is built around the outside, what is the area of the path?*
 
 Aryhant breaks down the problem into manageable steps, explaining each calculation clearly.
+
+### D. Syllabus-Aware Teaching
+Aryhant's teaching is grounded in a stored, subject-wise copy of the St. Xavier's Grade 5 ICSE syllabus — chapter by chapter, for Mathematics, English, Hindi, Science, Social Studies, and Computer Studies.
+> *@Aryhant What topics are in my Science syllabus?*
+> *@Aryhant Quiz me on the Fractions chapter*
+
+Ask about a subject with any natural wording ("maths", "general science") and Aryhant finds the right subject before answering.
 
 ---
 
@@ -112,7 +120,7 @@ Type `/preferences` anywhere in Slack to open your private settings window:
 
 ---
 
-## 6. System Health & Maintenance (`/admin`, `/audit`)
+## 6. System Health & Maintenance (`/admin`, `/audit`, Email)
 
 Authorized workspace members and operators can check Aryhant's health and operational status at any time:
 
@@ -120,6 +128,12 @@ Authorized workspace members and operators can check Aryhant's health and operat
 - **Instant Response**: You will immediately see:
   > *"Running system audit and operational maintenance..."*
 - **Audit Report**: Aryhant runs data retention cleanup, computes 7-day task metrics, diagnoses any recent errors, and delivers an operational summary to the channel.
+
+### Checking by Email
+Aryhant has its own email inbox. Send a short email to Aryhant's address containing an operational keyword — *audit, status, telemetry, health, metrics, prune, retention, failures, performance* — and it replies with a brief report.
+> *Subject: status — how is Aryhant doing this week?*
+
+Only allowlisted senders ever receive a reply; mail from anyone else is ignored silently, so strangers never trigger auto-replies.
 
 ---
 

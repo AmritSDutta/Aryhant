@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, Plus, Trash2, X, ExternalLink, Loader2 } from 'lucide-react';
+import { Globe, Plus, Trash2, X, ExternalLink } from 'lucide-react';
 
 export interface ReferenceUrlsProps {
   urls: string[];
@@ -7,85 +7,86 @@ export interface ReferenceUrlsProps {
   onRemoveUrl: (url: string) => void;
 }
 
-export async function verifyUrlReachability(
-  url: string,
-  timeoutMs: number = 5000
-): Promise<{ reachable: boolean; error?: string }> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    await fetch(url, { method: 'GET', mode: 'no-cors', signal: controller.signal });
-    clearTimeout(timer);
-    return { reachable: true };
-  } catch (err: unknown) {
-    const errorObj = err as { name?: string; message?: string };
-    if (errorObj?.name === 'AbortError') {
-      return { reachable: false, error: 'Connection timed out (5s limit).' };
-    }
-    return { reachable: false, error: 'URL is unreachable or network failed.' };
+export function validateUrlSyntax(raw: string): { valid: boolean; formatted: string; error?: string } {
+  let target = raw.trim();
+  if (!target) {
+    return { valid: false, formatted: '', error: 'Please enter a URL.' };
   }
+  if (!/^https?:\/\//i.test(target) && !target.startsWith('//')) {
+    target = `https://${target}`;
+  }
+  try {
+    const parsed = new URL(target);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { valid: false, formatted: target, error: 'Only http:// and https:// URLs are supported.' };
+    }
+    if (!parsed.hostname || (!parsed.hostname.includes('.') && parsed.hostname !== 'localhost')) {
+      return { valid: false, formatted: target, error: 'Invalid URL: domain name is missing or incomplete.' };
+    }
+    return { valid: true, formatted: target };
+  } catch {
+    return { valid: false, formatted: target, error: 'Invalid URL format.' };
+  }
+}
+
+export async function verifyUrlReachability(
+  _url: string,
+  _timeoutMs: number = 5000
+): Promise<{ reachable: boolean; error?: string }> {
+  // Pure syntax and client-safe reachability stub; network probes are omitted to conform to strict CSP
+  return { reachable: true };
 }
 
 export const ReferenceUrls: React.FC<ReferenceUrlsProps> = ({ urls, onAddUrl, onRemoveUrl }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [inputUrl, setInputUrl] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 
   const isFull = urls.length >= 10;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isVerifying) return;
-
-    let target = inputUrl.trim();
-    if (!target) {
-      setErrorMessage('Please enter a URL.');
-      return;
-    }
-
-    if (!/^https?:\/\//i.test(target)) {
-      target = `https://${target}`;
-    }
-
-    try {
-      const parsed = new URL(target);
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        setErrorMessage('Only http:// and https:// URLs are supported.');
-        return;
-      }
-    } catch {
-      setErrorMessage('Invalid URL format.');
-      return;
-    }
-
+  const commitAddUrl = async (target: string): Promise<void> => {
     if (urls.includes(target)) {
       setErrorMessage('This URL has already been added.');
       return;
     }
-
     if (urls.length >= 10) {
       setErrorMessage('Maximum 10 reference URLs reached.');
       return;
     }
-
-    setIsVerifying(true);
-    setErrorMessage(null);
-
-    const check = await verifyUrlReachability(target);
-    setIsVerifying(false);
-
-    if (!check.reachable) {
-      setErrorMessage(check.error || 'URL is unreachable.');
-      return;
-    }
-
     const added = await onAddUrl(target);
     if (added) {
       setInputUrl('');
       setErrorMessage(null);
+      setPendingUrl(null);
     } else {
       setErrorMessage('Failed to add URL.');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const raw = inputUrl.trim();
+    if (!raw) {
+      setErrorMessage('Please enter a URL.');
+      setPendingUrl(null);
+      return;
+    }
+
+    const check = validateUrlSyntax(raw);
+    if (!check.valid) {
+      setErrorMessage(check.error || 'Invalid URL format.');
+      setPendingUrl(check.formatted || raw);
+      return;
+    }
+
+    await commitAddUrl(check.formatted);
+  };
+
+  const handleAddAnyway = async () => {
+    if (pendingUrl) {
+      await commitAddUrl(pendingUrl);
     }
   };
 
@@ -132,13 +133,13 @@ export const ReferenceUrls: React.FC<ReferenceUrlsProps> = ({ urls, onAddUrl, on
       )}
 
       {isModalOpen && (
-        <div className="modal-backdrop" onClick={() => !isVerifying && setIsModalOpen(false)}>
+        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Manage Reference URLs</h3>
               <button
                 type="button"
-                onClick={() => !isVerifying && setIsModalOpen(false)}
+                onClick={() => setIsModalOpen(false)}
                 className="modal-close"
               >
                 <X size={18} />
@@ -155,19 +156,45 @@ export const ReferenceUrls: React.FC<ReferenceUrlsProps> = ({ urls, onAddUrl, on
                   type="text"
                   placeholder="https://example.com/syllabus"
                   value={inputUrl}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  disabled={isVerifying || isFull}
+                  onChange={(e) => {
+                    setInputUrl(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                    if (pendingUrl) setPendingUrl(null);
+                  }}
+                  disabled={isFull}
                   className="url-input"
                 />
                 <button
                   type="submit"
-                  disabled={isVerifying || isFull}
+                  disabled={isFull}
                   className="btn-submit-url"
                 >
-                  {isVerifying ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Add
+                  <Plus size={14} /> Add
                 </button>
               </div>
-              {errorMessage && <p className="url-error">{errorMessage}</p>}
+              {errorMessage && (
+                <div className="url-error-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                  <p className="url-error" style={{ margin: 0 }}>{errorMessage}</p>
+                  {pendingUrl && (
+                    <button
+                      type="button"
+                      onClick={handleAddAnyway}
+                      className="btn-add-anyway"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid currentColor',
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        color: 'inherit',
+                      }}
+                    >
+                      Add Anyway
+                    </button>
+                  )}
+                </div>
+              )}
             </form>
 
             <div className="url-list">

@@ -71,7 +71,6 @@ class Settings(BaseSettings):
     ARYHANT_AGENTMAIL_EMAILID: str = ""
     ARYHANT_AGENTMAIL_BCC_EMAIL: str = ""
 
-
     # Email Integration (IMAP / SMTP)
     EMAIL_ENABLED: bool = False
     EMAIL_IMAP_HOST: str = "imap.gmail.com"
@@ -101,7 +100,7 @@ class Settings(BaseSettings):
     MODERATION_API_CHECK_REQ: bool = False
 
     # API Authentication & Auth0
-    REQUIRE_AUTH: bool = False
+    REQUIRE_AUTH: bool = True
     AUTH0_DOMAIN: str = ""
     AUTH0_AUDIENCE: str = ""
     LOG_USER_INFO: bool = True
@@ -177,6 +176,7 @@ class Settings(BaseSettings):
     @property
     def aryhant_webhook_shared_secret(self) -> str:
         return self.ARYHANT_WEBHOOK_SHARED_SECRET or os.getenv("ARYHANT_WEBHOOK_SHARED_SECRET", "")
+
     @property
     def aryhant_agentmail_api_key(self) -> str:
         return self.ARYHANT_AGENTMAIL_API_KEY or os.getenv("ARYHANT_AGENTMAIL_API_KEY", "")
@@ -192,7 +192,6 @@ class Settings(BaseSettings):
     @property
     def agentmail_ready(self) -> bool:
         return bool(self.aryhant_agentmail_api_key)
-
 
     @property
     def email_allowed_senders_list(self) -> List[str]:
@@ -307,5 +306,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-

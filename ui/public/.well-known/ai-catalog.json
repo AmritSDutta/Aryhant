@@ -1,0 +1,15 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Aryhant Family AI Assistant",
+    "identifier": "https://aryhant.pages.dev"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:aryhant.pages.dev:webmcp:suite",
+      "displayName": "Aryhant WebMCP Browser Tools",
+      "type": "application/mcp-server-card+json",
+      "url": "https://aryhant.pages.dev/.well-known/mcp-server.json"
+    }
+  ]
+}

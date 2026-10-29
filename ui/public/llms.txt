@@ -1,0 +1,16 @@
+# Aryhant Family AI Assistant
+
+> Multimodal pedagogical companion and daily family AI assistant powered by NVIDIA Nemotron via Nebius Token Factory with 3-tier WebMCP browser integration, ICSE Grade 5 syllabus tutoring, client-side BM25 document search, and publication-ready PDF reports.
+
+## Overview
+Aryhant provides dual capabilities: an expert AI teaching companion tailored for ICSE Grade 5 students and an everyday family assistant for planning, writing, problem-solving, and research. It exposes browser-level tools via the open WebMCP standard, persists dialogue in IndexedDB, and generates handwritten study notes and publication-quality PDFs.
+
+## Capabilities & Tools
+- [WebMCP Browser Tools](https://aryhant.pages.dev/): 10 browser-side tools including BM25 document retrieval, calculator, live web search, reference URLs, and session PDF export.
+- [Model Architecture](https://aryhant.pages.dev/llms.txt): Two-phase routing with Nemotron-3.5-Super-VL for visual extraction and Nemotron-3-Nano-30B for fast conversational reasoning.
+- [Document Retrieval](https://aryhant.pages.dev/): In-browser WASM-based document extraction for PDF, DOCX, DOC, TXT, and MD files under 2MB.
+
+## Documentation & Specification
+- [WebMCP Specification](https://aryhant.pages.dev/.well-known/ai-catalog.json): Canonical capability manifest and tool declarations conforming to ARD 1.0.
+- [MCP Server Card](https://aryhant.pages.dev/.well-known/mcp-server.json): Complete schemas, inputs, and descriptions for browser-callable tools.
+- [Sitemap](https://aryhant.pages.dev/sitemap.xml): Machine-readable index of site pages.

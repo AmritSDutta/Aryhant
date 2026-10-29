@@ -81,35 +81,37 @@ export const Header: React.FC = () => {
       <div className="header-actions">
         <StatusPill />
 
-        <button
-          type="button"
-          className="warmup-btn"
-          onClick={handleWarmUpServer}
-          disabled={isWarming}
-          title="Ping /api/health to warm up cold Cloud Run instance"
-        >
-          {isWarming ? (
-            <>
-              <Loader2 size={13} className="spin" />
-              <span>Warming Up...</span>
-            </>
-          ) : warmStatus === 'success' ? (
-            <>
-              <CheckCircle2 size={13} color="#2e7d32" />
-              <span>Server Ready</span>
-            </>
-          ) : warmStatus === 'error' ? (
-            <>
-              <AlertCircle size={13} color="#c62828" />
-              <span>Retry Warmup</span>
-            </>
-          ) : (
-            <>
-              <Flame size={13} />
-              <span>Warm Up Server</span>
-            </>
-          )}
-        </button>
+        {auth0?.isAuthenticated && auth0.user && (
+          <button
+            type="button"
+            className="warmup-btn"
+            onClick={handleWarmUpServer}
+            disabled={isWarming}
+            title="Ping /api/health to warm up cold Cloud Run instance"
+          >
+            {isWarming ? (
+              <>
+                <Loader2 size={13} className="spin" />
+                <span>Warming Up...</span>
+              </>
+            ) : warmStatus === 'success' ? (
+              <>
+                <CheckCircle2 size={13} color="#2e7d32" />
+                <span>Server Ready</span>
+              </>
+            ) : warmStatus === 'error' ? (
+              <>
+                <AlertCircle size={13} color="#c62828" />
+                <span>Retry Warmup</span>
+              </>
+            ) : (
+              <>
+                <Flame size={13} />
+                <span>Warm Up Server</span>
+              </>
+            )}
+          </button>
+        )}
 
         {appConfig.isAuthEnabled && auth0 && (
           <>

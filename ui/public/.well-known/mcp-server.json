@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0",
+  "name": "Aryhant WebMCP Browser Tools",
+  "description": "Browser-side Model Context Protocol tools including in-browser BM25 document search, calculator, live web search, reference URLs, and session PDF export.",
+  "transport": {
+    "type": "postmessage",
+    "endpoint": "https://aryhant.pages.dev"
+  },
+  "capabilities": {
+    "tools": [
+      {
+        "name": "get_tool_usage_prompt",
+        "description": "Returns the complete agent operating guide with tool usage rules. Call this first."
+      },
+      {
+        "name": "get_reference_url",
+        "description": "Returns comma-separated external reference and syllabus URLs configured by the user."
+      },
+      {
+        "name": "get_current_time",
+        "description": "Returns user's local date, weekday, time, timezone, and ISO timestamp."
+      },
+      {
+        "name": "get_chat_history",
+        "description": "Returns recent dialogue turns prefixed with user: and agent:."
+      },
+      {
+        "name": "chat_post",
+        "description": "Posts an assistant reply or status message directly into the chat stream."
+      },
+      {
+        "name": "search_document",
+        "description": "Client-side BM25 search over uploaded document chunks in browser IndexedDB. Returns top 3 relevant pages."
+      },
+      {
+        "name": "clean_document",
+        "description": "Purges stored document metadata, chunks, and BM25 index from IndexedDB."
+      },
+      {
+        "name": "search_web",
+        "description": "Live web search using keyless Tavily AI with automatic DuckDuckGo fallback."
+      },
+      {
+        "name": "calculate",
+        "description": "Evaluates decimal and scientific mathematical expressions accurately."
+      },
+      {
+        "name": "export_pdf",
+        "description": "Generates and downloads a publication-quality session PDF report."
+      }
+    ]
+  }
+}

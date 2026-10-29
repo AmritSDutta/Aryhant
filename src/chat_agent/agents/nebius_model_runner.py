@@ -209,6 +209,7 @@ def _build_nebius_content(content: types.Content) -> str | list[dict[str, Any]]:
         for p in parts
     )
     if not has_images:
+        logger.info('Found no images')
         text_chunks: list[str] = []
         for p in parts:
             text = getattr(p, "text", None)
@@ -220,7 +221,7 @@ def _build_nebius_content(content: types.Content) -> str | list[dict[str, Any]]:
                 mime = (getattr(inline_data, "mime_type", "") or "").lower()
                 if mime == "application/pdf":
                     from chat_agent.utils.pdf_extractor import extract_pdf_markdown
-
+                    logger.info('Found pdfs')
                     pdf_text = extract_pdf_markdown(inline_data.data)
                     text_chunks.append(
                         f"\n\n[PDF content:\n{pdf_text}\n]"

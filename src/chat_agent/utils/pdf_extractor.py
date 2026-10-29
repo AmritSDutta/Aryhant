@@ -12,6 +12,7 @@ def extract_pdf_markdown(pdf_source: bytes | str) -> str:
         return ""
     try:
         from liteparse import LiteParse
+        logger.info('Found pdfs, extracting markdown')
 
         parser = LiteParse(
             output_format="markdown",
@@ -22,4 +23,4 @@ def extract_pdf_markdown(pdf_source: bytes | str) -> str:
         return (getattr(result, "text", "") or "").strip()
     except Exception as e:
         logger.warning("LiteParse PDF extraction failed: %s", e)
-        return ""
+        return f"LiteParse failed, so could not extract text from PDF, error: {e}"

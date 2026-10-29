@@ -200,6 +200,22 @@ body {
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.user-avatar-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 /* Chat Layout */

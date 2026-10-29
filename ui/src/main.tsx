@@ -21,6 +21,7 @@ if (appConfig.isAuthEnabled) {
         authorizationParams={{
           redirect_uri: window.location.origin,
           audience: appConfig.auth0Audience || undefined,
+          scope: 'openid profile email',
         }}
         useRefreshTokens={true}
         cacheLocation="localstorage"

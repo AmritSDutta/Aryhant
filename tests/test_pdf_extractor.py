@@ -32,10 +32,10 @@ def test_extract_pdf_markdown_valid():
 
 
 def test_extract_pdf_markdown_corrupt():
-    """Verify corrupt or unreadable PDF bytes fail gracefully with empty string."""
+    """Verify corrupt or unreadable PDF bytes return error explanation message."""
     corrupt_bytes = b"not-a-valid-pdf-header-content"
     extracted = extract_pdf_markdown(corrupt_bytes)
-    assert extracted == ""
+    assert extracted.startswith("LiteParse failed, so could not extract text from PDF")
 
 
 def test_extract_pdf_markdown_empty():

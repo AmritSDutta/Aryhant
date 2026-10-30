@@ -21,7 +21,7 @@ request research papers, manage your preferences, and run administrative checks.
   - `/deliberate <question>`: Generates a 1,500-word Decision Guide PDF with comparative evaluation matrices.
   - `/preferences`: Opens your personal data and learning habits privacy modal.
   - `/admin` or `/audit`: Runs 15-day retention pruning and generates an operational health audit.
-
+- Docs: Run locally with docs7 dev docs --port 3333 at http://localhost:3333.
 ---
 
 ## 2. ICSE Grade 5 Study & Learning Companion

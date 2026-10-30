@@ -130,7 +130,7 @@ The synthesized publication is evaluated across 4 objective quality dimensions u
 - `production_guidance`: Actionability of edge-case, failure-mode, and benchmark analyses.
 
 #### Deterministic Critique & Automated Retry
-If the quality score falls below threshold (`0.70`), the validator deterministically derives actionable critique from the failing criteria. The synthesis engine automatically incorporates this critique and retries synthesis (up to 3 attempts).
+If the quality score falls below threshold (`0.60`), the validator deterministically derives actionable critique from the failing criteria. The synthesis engine automatically incorporates this critique and retries synthesis (up to 3 attempts).
 
 ### 8. Single-Thread Transparency (`[INTERNAL]` Notices)
 All progress notifications—including intelligence stream status, sandbox execution outputs, and JEV critique loops—are posted directly into the root Slack conversation thread with `[INTERNAL]` tags, keeping users informed without cluttering other channels.

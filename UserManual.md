@@ -2,8 +2,9 @@
 
 Welcome to **Aryhant**, your daily AI companion and specialized ICSE Grade 5 teaching assistant!
 
-This guide is written for students, parents, teachers, and Slack workspace members. It explains how to interact with Aryhant, use its educational and study features, request research papers, manage your preferences, and run administrative checks.
-
+This guide is written for students, parents, teachers, and Slack workspace members. 
+It explains how to interact with Aryhant, use its educational and study features, 
+request research papers, manage your preferences, and run administrative checks.
 ---
 
 ## 1. Getting Started in Slack
@@ -16,7 +17,7 @@ This guide is written for students, parents, teachers, and Slack workspace membe
 - **In Message Threads**: When Aryhant replies in a thread, keep the conversation going in that thread to maintain conversation history.
 - **From a Desktop Browser**: The same assistant is also available on the Aryhant web page — handy for longer, sit-down sessions.
 - **Dedicated Slash Commands**:
-  - `/research <topic>`: Generates a 2,500-word deep technical whitepaper PDF with verified code.
+  - `/research <topic>`: Generates a 2,500-word lite technical whitepaper PDF with verified code.
   - `/deliberate <question>`: Generates a 1,500-word Decision Guide PDF with comparative evaluation matrices.
   - `/preferences`: Opens your personal data and learning habits privacy modal.
   - `/admin` or `/audit`: Runs 15-day retention pruning and generates an operational health audit.
@@ -74,11 +75,11 @@ Need a visual poster for quick review?
 
 ---
 
-## 4. Deep Research & Deliberation Guides
+## 4. Lite Research & Deliberation Guides
 
 For students, parents, researchers, and engineers, Aryhant includes an autonomous, fault-tolerant research pipeline:
 
-### A. Deep Technical Research Whitepapers (`/research`)
+### A. Lite Technical Research Whitepapers (`/research`)
 > `/research Linux io_uring architecture vs epoll high-throughput networking`
 > Or attach a systems architecture diagram:
 > `@Aryhant /research Analyze this distributed event-driven pipeline and identify scalability bottlenecks`

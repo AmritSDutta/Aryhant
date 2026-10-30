@@ -1,8 +1,8 @@
 # Aryhant: AI Daily Companion & ICSE Teaching Assistant
 
-An always-on personal AI companion powered by **Nebius Token Factory** running **NVIDIA Nemotron** open source models, delivered through Slack, a web UI, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous deep technical research with 24-hour failover resume. Gemini and OpenAI models serve as automatic fallbacks only.
+An always-on personal AI companion powered by **Nebius Token Factory** running **NVIDIA Nemotron** open source models, delivered through Slack, a web UI, email, and REST API chat endpoints. Aryhant assists with everyday life, planning, writing, problem-solving, and learning, while specializing as an expert AI teaching companion for **St. Xavier's Grade 5 students under the ICSE curriculum**. Features automated universal handwritten-style Study Notes PDF compilation, Lesson Infographic posters, and autonomous lite technical research with 24-hour failover resume. Gemini and OpenAI models serve as automatic fallbacks only.
 
-> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, 24-hour resilient deep research whitepapers, a subject-wise ICSE syllabus store, and an AgentMail administrative email channel are fully implemented.
+> **Status:** Slack (Socket Mode & HTTP events API), REST API, CLI, multimodal attachment handling, multi-provider web search, universal Study Notes / Infographics PDF generation, 24-hour resilient lite research whitepapers, a subject-wise ICSE syllabus store, and an AgentMail administrative email channel are fully implemented.
 
 ## Powered by Nebius Token Factory & NVIDIA Nemotron
 
@@ -24,7 +24,7 @@ See [docs/nebius.mdx](docs/nebius.mdx) for the full architecture. Gemini (Google
 | Grade 5 ICSE Teaching Specialization | Tailored for St. Xavier's Grade 5 ICSE syllabus: plain-text math (`3/5`, `cm²`, `+`, `-`, `x`, `÷`), 5–10 numbered practice questions, and answer keys grouped at the end. Teaching is grounded in a stored subject-wise syllabus (Turso `icse_syllabus` table) exposed to the agents as the `get_icse_syllabus` tool with fuzzy subject matching |
 | Question Generation & TypeSafe Curation | Generates 15–20 candidate practice questions and hints via secondary LLM agent (`QA_GENERATOR_INSTRUCTION`), and uses TypeSafe AI System One (`Noul`) for parallel hint scoring and top-10 curation |
 | Universal PDF Notes & Infographics | ReportLab handwritten notebook notes (`generate_study_notes_pdf`) and visual posters (`generate_infographic_pdf`) on **any topic** compiled on background threads and auto-uploaded to Slack threads |
-| Resilient Deep Research & Deliberation (Role 3) | Autonomous research pipeline delivering ~2,500-word whitepaper PDFs (`/research`) and ~1,500-word Decision Guide PDFs with comparative matrices (`/deliberate`), 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
+| Resilient Lite Research & Deliberation (Role 3) | Autonomous lite research pipeline delivering ~2,500-word whitepaper PDFs (`/research`) and ~1,500-word Decision Guide PDFs with comparative matrices (`/deliberate`), 4-stream intelligence gathering, Nebius sandbox microVM code verification, concurrent FAQ formulation, JEV quality loop, and 24-hour checkpoint failover resume |
 | Direct Multi-Model Engine | Direct Google GenAI SDK (`google.genai.Client`) with 3 random attempts across `FIRST_CHOICE_MODELS` and automatic failover to `FALLBACK_GPT_MODEL` (`gpt-6-luna`) via `AsyncOpenAI` / `httpx` |
 | Procedural Diagrams | Dynamic math and science diagram generator (parabolas, waves, geometric figures, circuits, biological structures) |
 | Multimodal Handling | Ingests Slack images, audio, PDFs, and documents with parallel downloads, projected size pre-filtering, LiteParse PDF markdown extraction, and prior-turn binary attachment pruning |
@@ -191,6 +191,16 @@ proxies/                 Cloudflare Worker source
 docs/                    docs7 documentation site
 tests/                   pytest hermetic test suite (224 tests)
 ```
+
+## Run documentation locally (docs7)
+
+To preview the documentation site locally:
+
+```bash
+docs7 dev docs --port 3333
+```
+
+The docs will be available at <http://localhost:3333>. See the [docs7 playbook](https://docs7.io) for more details.
 
 ## Code map and tests
 

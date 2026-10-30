@@ -54,7 +54,7 @@ Requires `USER_LLM_API_KEY` (Google AI Studio) in `.env` for real agent replies;
 │   │   ├── prompt.py               # Persona & ICSE Grade 5 pedagogical system instructions
 │   │   ├── question_generator.py   # Practice question generator agent (facade)
 │   │   └── runner.py               # Orchestrator: text clipping, multimodal validation, model delegation
-│   ├── research/                   # Role 3: Resilient deep research agent and whitepaper generation
+│   ├── research/                   # Role 3: Resilient lite research agent and whitepaper generation
 │   │   ├── engine.py               # 4 concurrent intelligence streams with per-tool status & cache reuse
 │   │   ├── faq_engine.py           # Concurrent async FAQ generation with 24h caching
 │   │   ├── intake.py               # Scope formulation, clarity check & 20s grace window

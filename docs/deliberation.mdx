@@ -71,7 +71,8 @@ flowchart TD
 5. **Tavily Mini-Research Polling**: Submits targeted queries to Tavily (`model="mini"`) and polls until completion with session tracking for up-to-date pricing and consumer reviews.
 6. **Multimodal Evidence Ingestion**: Ingests user-attached product photos, spec sheets, insurance quotes, nutrition labels, or financial charts and embeds them into the PDF report.
 7. **24-Hour Fault Tolerance & Resilient Checkpointing**: All job states, tool outputs, and checkpoints are persisted under `aryhant:job:{job_id}` in Upstash Redis with secondary indexing (`find_active_job`) allowing interrupted deliberation jobs to resume seamlessly within 24 hours.
-8. **Live Slack TODO Board**: Displays dynamic Block Kit progress rows that advance in real time (`⬜` $\to$ `🔄` $\to$ `✅`) via Slack `chat.update`.
+8. **JEV Quality Validation**: Decision guides are evaluated by `jev_validator.py` with a composite score threshold (`0.60`) and up to 3 synthesis retries when below threshold.
+9. **Live Slack TODO Board**: Displays dynamic Block Kit progress rows that advance in real time (`⬜` $\to$ `🔄` $\to$ `✅`) via Slack `chat.update`.
 
 ---
 

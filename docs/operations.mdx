@@ -145,7 +145,7 @@ gcloud run deploy aryhant \
 
 Aryhant includes automated operational telemetry tracking and data lifecycle hygiene:
 
-- **15-Day Data Retention Policy**: The session_tasks table records all background operations (e.g. Deep Research tasks). Records older than 15 days are automatically pruned during admin audits to minimize database storage and enforce privacy standards.
+- **15-Day Data Retention Policy**: The session_tasks table records all background operations (e.g. Lite Research tasks). Records older than 15 days are automatically pruned during admin audits to minimize database storage and enforce privacy standards.
 - **7-Day Telemetry Audits**: Operators can inspect execution volume, success/failure counts, and diagnostic failure signatures by running /admin or /audit in Slack.
 - **Hermetic Testing**: The test suite covers all database fallback paths and tool dispatch loops with hermetic unit tests:
   `powershell

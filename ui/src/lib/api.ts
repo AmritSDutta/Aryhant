@@ -7,12 +7,18 @@ function getApiUrl(path: string): string {
   return `${base}${cleanPath}`;
 }
 
-export async function fetchHealth(): Promise<HealthResponse> {
+export async function fetchHealth(token?: string): Promise<HealthResponse> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(getApiUrl('/api/health'), {
     method: 'GET',
-    headers: {
-      Accept: 'application/json',
-    },
+    headers,
   });
 
   if (!res.ok) {

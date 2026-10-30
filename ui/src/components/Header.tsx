@@ -36,7 +36,19 @@ export const Header: React.FC = () => {
     setIsWarming(true);
     setWarmStatus('idle');
     try {
-      const res = await fetchHealth();
+      let token: string | undefined = undefined;
+      if (appConfig.isAuthEnabled && auth0?.isAuthenticated) {
+        try {
+          token = await auth0.getAccessTokenSilently({
+            authorizationParams: {
+              audience: appConfig.auth0Audience || undefined,
+            },
+          });
+        } catch {
+          // Token retrieval optional
+        }
+      }
+      const res = await fetchHealth(token);
       if (res && res.ok) {
         setWarmStatus('success');
       } else {
@@ -79,7 +91,7 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="header-actions">
-        <StatusPill />
+        {(!appConfig.isAuthEnabled || auth0?.isAuthenticated) && <StatusPill />}
 
         {auth0?.isAuthenticated && auth0.user && (
           <button

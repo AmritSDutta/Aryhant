@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { RotateCcw, Download, Trash2 } from 'lucide-react';
 import { Header } from './components/Header';
+import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChatPanel, ChatBridge } from './components/ChatPanel';
 import { FileUpload } from './components/FileUpload';
 import { ReferenceUrls } from './components/ReferenceUrls';
@@ -29,7 +31,14 @@ export const App: React.FC = () => {
   // Document controller
   const doc = useDocumentController({
     onError: (title, message) => {
-      alert(`${title}: ${message}`);
+      setConfirmModal({
+        isOpen: true,
+        title,
+        message,
+        confirmLabel: 'OK',
+        variant: 'warning',
+        onConfirm: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
+      });
     },
     onDocumentIndexed: () => {
       updateWebMCPContext();
@@ -110,6 +119,67 @@ export const App: React.FC = () => {
     updateWebMCPContext();
   };
 
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const handleNewSession = async () => {
+    const hasMessages = (chatBridgeRef.current?.getMessages() || []).length > 0;
+    if (hasMessages) {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Start New Session',
+        message: 'Starting a new session will clear the current dialogue and prior session data from browser storage. Proceed?',
+        confirmLabel: 'Start New Session',
+        variant: 'primary',
+        onConfirm: async () => {
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          await chatBridgeRef.current?.newSession?.();
+        },
+      });
+    } else {
+      await chatBridgeRef.current?.newSession?.();
+    }
+  };
+
+  const handleExportPdf = () => {
+    const res = chatBridgeRef.current?.exportPdf?.();
+    if (res && !res.success && res.error) {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Export PDF Notice',
+        message: res.error,
+        confirmLabel: 'OK',
+        variant: 'warning',
+        onConfirm: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
+      });
+    }
+  };
+
+  const handleClearHistory = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Clear Chat History',
+      message: 'Are you sure you want to clear all conversation history from browser storage (IndexedDB)? This action cannot be undone.',
+      confirmLabel: 'Clear History',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        await chatBridgeRef.current?.clearHistory?.();
+      },
+    });
+  };
+
   return (
     <div className="app-container">
       <Header />
@@ -125,6 +195,35 @@ export const App: React.FC = () => {
             onAddUrl={handleAddReferenceUrl}
             onRemoveUrl={handleRemoveReferenceUrl}
           />
+          <div className="sidebar-session-controls">
+            <button
+              type="button"
+              className="sidebar-ctrl-btn primary"
+              onClick={handleNewSession}
+              title="Start a new session (implicitly clears prior session data from browser storage)"
+            >
+              <RotateCcw size={14} />
+              <span>New Session</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-ctrl-btn"
+              onClick={handleExportPdf}
+              title="Export current session as PDF"
+            >
+              <Download size={14} />
+              <span>Export PDF</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-ctrl-btn danger"
+              onClick={handleClearHistory}
+              title="Clear all stored chat history from IndexedDB"
+            >
+              <Trash2 size={14} />
+              <span>Clear History</span>
+            </button>
+          </div>
           <div className="webmcp-indicator">
             <span className="webmcp-dot"></span>
             <span>WebMCP: 10 Tools Active</span>
@@ -138,6 +237,16 @@ export const App: React.FC = () => {
           />
         </main>
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        variant={confirmModal.variant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

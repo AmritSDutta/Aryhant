@@ -24,6 +24,8 @@ export interface ChatBridge {
   getMessages: () => Array<{ sender: 'user' | 'assistant' | 'agent'; text: string; timestamp?: string | number }>;
   postMessage: (text: string) => void;
   exportPdf?: () => ExportPdfResult;
+  newSession?: () => Promise<void>;
+  clearHistory?: () => Promise<void>;
 }
 
 interface ChatPanelProps {
@@ -51,6 +53,28 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ activeDocName, onRegisterC
     });
   }, [activeDocName]);
 
+  const handleNewSession = React.useCallback(async () => {
+    try {
+      // Implicitly clear prior session data from browser storage (IndexedDB & sessionStorage)
+      await globalIDBStorage.clearAllChatHistory();
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch (err) {
+      console.warn('Could not clear prior session data from IndexedDB:', err);
+    }
+
+    const newId = 'web-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
+    sessionStorage.setItem(SESSION_KEY, newId);
+    setSessionId(newId);
+    setMessages([]);
+    setAlertError(null);
+
+    try {
+      await globalIDBStorage.setActiveSessionId(newId);
+    } catch (err) {
+      console.warn('Could not update active session ID in IDB:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (onRegisterChatBridge) {
       onRegisterChatBridge({
@@ -74,9 +98,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ activeDocName, onRegisterC
           }).catch((err) => console.warn('Could not save agent turn to IDB:', err));
         },
         exportPdf: handleExportPdf,
+        newSession: handleNewSession,
+        clearHistory: handleNewSession,
       });
     }
-  }, [onRegisterChatBridge, handleExportPdf]);
+  }, [onRegisterChatBridge, handleExportPdf, handleNewSession]);
 
   const auth0 = appConfig.isAuthEnabled ? useAuth0() : null;
 
@@ -123,19 +149,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ activeDocName, onRegisterC
       }
     })();
   }, []);
-
-  const handleNewSession = async () => {
-    const newId = 'web-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
-    sessionStorage.setItem(SESSION_KEY, newId);
-    setSessionId(newId);
-    setMessages([]);
-    setAlertError(null);
-    try {
-      await globalIDBStorage.setActiveSessionId(newId);
-    } catch (err) {
-      console.warn('Could not update active session ID in IDB:', err);
-    }
-  };
 
   const handleSendMessage = async (text: string) => {
     setAlertError(null);
@@ -231,8 +244,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ activeDocName, onRegisterC
 
       <MessageInput
         onSendMessage={handleSendMessage}
-        onNewSession={handleNewSession}
-        onExportPdf={handleExportPdf}
         disabled={loading}
       />
     </div>

@@ -841,6 +841,89 @@ body {
   line-height: 1.4;
 }
 
+/* Confirmation Modal Specifics */
+.confirmation-modal-card {
+  max-width: 420px;
+  gap: 1.15rem;
+}
+
+.confirm-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirm-icon-badge.danger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.confirm-icon-badge.warning {
+  background: #fefce8;
+  color: #ca8a04;
+}
+
+.confirm-icon-badge.primary {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.confirmation-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.btn-modal-cancel {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-modal-cancel:hover {
+  background: var(--bg-main);
+  border-color: #cbd5e1;
+}
+
+.btn-modal-confirm {
+  padding: 0.45rem 0.95rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  transition: all 0.15s ease;
+}
+
+.btn-modal-confirm.danger {
+  background: #dc2626;
+}
+
+.btn-modal-confirm.danger:hover {
+  background: #b91c1c;
+}
+
+.btn-modal-confirm.primary {
+  background: var(--primary);
+}
+
+.btn-modal-confirm.primary:hover {
+  background: var(--primary-hover);
+}
+
 .url-form {
   display: flex;
   flex-direction: column;
@@ -933,12 +1016,71 @@ body {
 }
 
 /* =========================================================================
+   Sidebar Session Controls (Post-URL link)
+   ========================================================================= */
+.sidebar-session-controls {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sidebar-ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #fdfbf7;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-ctrl-btn:hover {
+  background: #f7efe1;
+  border-color: #cbd5e1;
+}
+
+.sidebar-ctrl-btn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.sidebar-ctrl-btn.primary:hover {
+  background: var(--primary-hover);
+}
+
+.sidebar-ctrl-btn.danger {
+  color: #b91c1c;
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.sidebar-ctrl-btn.danger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* =========================================================================
    WebMCP Status Indicator
    ========================================================================= */
 .webmcp-indicator {
   width: 100%;
-  margin-top: auto;
-  padding-top: 1rem;
+  margin-top: 0;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;

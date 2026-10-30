@@ -200,6 +200,17 @@ export class IDBStorage {
     });
   }
 
+  public async clearAllChatHistory(): Promise<void> {
+    const db = await this.getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['session_turns', 'session_meta'], 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore('session_turns').clear();
+      tx.objectStore('session_meta').clear();
+    });
+  }
+
   public async getAllSessionsSummary(): Promise<SessionSummary[]> {
     const db = await this.getDB();
     return new Promise((resolve, reject) => {
